@@ -26,13 +26,13 @@ openclaw gateway restart
 
 ## Configure
 
-Set plugin config under `plugins.entries.statocyst-openclaw.config`:
+Set plugin config under `plugins.entries.openclaw-plugin-statocyst.config`:
 
 ```json
 {
   "plugins": {
     "entries": {
-      "statocyst-openclaw": {
+      "openclaw-plugin-statocyst": {
         "enabled": true,
         "config": {
           "baseUrl": "https://hub.example.com/v1",
@@ -60,10 +60,10 @@ File-based config example:
 {
   "plugins": {
     "entries": {
-      "statocyst-openclaw": {
+      "openclaw-plugin-statocyst": {
         "enabled": true,
         "config": {
-          "configFile": "/etc/molten/statocyst-openclaw.json"
+          "configFile": "/etc/molten/openclaw-plugin-statocyst.json"
         }
       }
     }
@@ -71,7 +71,7 @@ File-based config example:
 }
 ```
 
-`/etc/molten/statocyst-openclaw.json`:
+`/etc/molten/openclaw-plugin-statocyst.json`:
 
 ```json
 {
@@ -82,7 +82,7 @@ File-based config example:
 }
 ```
 
-You can also set `STATOCYST_CONFIG_FILE=/path/to/statocyst-openclaw.json` in the OpenClaw runtime environment.
+You can also set `STATOCYST_CONFIG_FILE=/path/to/openclaw-plugin-statocyst.json` in the OpenClaw runtime environment.
 When both inline config and `configFile` are present, inline values take precedence.
 
 ## Statocyst usage registration
@@ -90,7 +90,7 @@ When both inline config and `configFile` are present, inline values take precede
 This plugin actively records usage in Statocyst:
 
 - `POST /v1/openclaw/messages/register-plugin` is called before session checks and skill requests.
-- Statocyst stores plugin metadata on the agent profile under `metadata.plugins.statocyst-openclaw`.
+- Statocyst stores plugin metadata on the agent profile under `metadata.plugins.openclaw-plugin-statocyst`.
 - Statocyst appends agent activity entries for:
   - plugin registration (`openclaw_plugin`)
   - OpenClaw adapter usage (`openclaw_adapter` events across publish/pull/ack/nack/status/ws)
@@ -100,7 +100,7 @@ You can inspect this data via `GET /v1/agents/me`.
 ## OpenClaw onboarding flow
 
 1. Create/bind the Statocyst agent token (`POST /v1/agents/bind-tokens`, then `POST /v1/agents/bind`).
-2. Configure plugin entry in OpenClaw (`plugins.entries.statocyst-openclaw.config`).
+2. Configure plugin entry in OpenClaw (`plugins.entries.openclaw-plugin-statocyst.config`).
 3. Ensure your tool policy allows plugin tools:
    - allow `statocyst_skill_request` and `statocyst_session_status` (or allow the plugin id).
 4. Restart OpenClaw gateway.

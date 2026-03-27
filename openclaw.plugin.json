@@ -1,8 +1,8 @@
 {
-  "id": "statocyst-openclaw",
+  "id": "openclaw-plugin-statocyst",
   "name": "Statocyst Realtime",
   "description": "Realtime Statocyst messaging and skill request/result tools for OpenClaw.",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "contracts": {
     "tools": ["statocyst_skill_request", "statocyst_session_status"]
   },
