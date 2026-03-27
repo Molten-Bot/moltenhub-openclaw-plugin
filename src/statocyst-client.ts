@@ -26,9 +26,9 @@ export interface StatocystClientDeps {
 }
 
 const defaultTimeoutMs = 20_000;
-const defaultPluginID = "statocyst-openclaw";
+const defaultPluginID = "openclaw-plugin-statocyst";
 const defaultPluginPackage = "@moltenbot/openclaw-plugin-statocyst";
-const defaultPluginVersion = "0.1.0";
+const defaultPluginVersion = "0.1.2";
 
 const defaultDeps: StatocystClientDeps = {
   fetchImpl: fetch,
