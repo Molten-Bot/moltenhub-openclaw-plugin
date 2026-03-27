@@ -60,7 +60,7 @@ function testConfig() {
     token: "agent-token",
     sessionKey: "main",
     timeoutMs: 1000,
-    pluginId: "statocyst-openclaw",
+    pluginId: "openclaw-plugin-statocyst",
     pluginPackage: "@moltenbot/openclaw-plugin-statocyst",
     pluginVersion: "0.1.0-test"
   };
