@@ -541,6 +541,28 @@ describe("StatocystClient", () => {
     });
   });
 
+  it("checkSession handles session_ready emitted immediately after open", async () => {
+    const socket = new FakeWebSocket();
+
+    const client = new StatocystClient(testConfig(), {
+      fetchImpl: fetchOKSpy(),
+      wsFactory: () => {
+        queueMicrotask(() => {
+          socket.emitOpen();
+          socket.emitMessage({ type: "session_ready", session_key: "main" });
+        });
+        return socket;
+      }
+    });
+
+    const status = await client.checkSession();
+    expect(status).toEqual({
+      status: "ok",
+      sessionKey: "main",
+      transport: "websocket"
+    });
+  });
+
   it("checkSession rejects unexpected websocket handshake payload", async () => {
     const socket = new FakeWebSocket();
 

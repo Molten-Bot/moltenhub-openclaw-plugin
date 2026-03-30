@@ -265,9 +265,9 @@ export class StatocystClient {
       Authorization: `Bearer ${this.config.token}`
     });
 
-    await waitForOpen(socket, timeoutMs);
     const session = new WebSocketSession(socket);
     session.attach();
+    await waitForOpen(socket, timeoutMs);
 
     const firstMessage = await session.next(timeoutMs);
     if (trimOrEmpty(firstMessage.type) !== "session_ready") {
