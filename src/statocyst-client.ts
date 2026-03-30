@@ -28,7 +28,8 @@ export interface StatocystClientDeps {
 const defaultTimeoutMs = 20_000;
 const defaultPluginID = "openclaw-plugin-statocyst";
 const defaultPluginPackage = "@moltenbot/openclaw-plugin-statocyst";
-const defaultPluginVersion = "0.1.2";
+const defaultPluginVersion = "0.1.4";
+const defaultStatocystBaseURL = "https://na.hive.molten.bot/v1";
 
 const defaultDeps: StatocystClientDeps = {
   fetchImpl: fetch,
@@ -349,7 +350,7 @@ export function resolveConfig(context: ResolveConfigInput): StatocystPluginConfi
       asString(fileConfig.baseURL) ||
       env.STATOCYST_BASE_URL ||
       env.STATOCYST_API_BASE ||
-      ""
+      defaultStatocystBaseURL
   );
   const token = trimOrEmpty(asString(config.token) || asString(fileConfig.token) || env.STATOCYST_AGENT_TOKEN || "");
   const sessionKey = trimOrEmpty(asString(config.sessionKey) || asString(fileConfig.sessionKey) || env.STATOCYST_SESSION_KEY || "main");
@@ -364,9 +365,6 @@ export function resolveConfig(context: ResolveConfigInput): StatocystPluginConfi
     asString(config.pluginVersion) || asString(fileConfig.pluginVersion) || defaultPluginVersion
   );
 
-  if (!baseUrl) {
-    throw new Error("Statocyst plugin configuration requires baseUrl");
-  }
   if (!token) {
     throw new Error("Statocyst plugin configuration requires token");
   }

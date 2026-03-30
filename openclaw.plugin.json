@@ -2,13 +2,21 @@
   "id": "openclaw-plugin-statocyst",
   "name": "Statocyst Realtime",
   "description": "Realtime Statocyst messaging and skill request/result tools for OpenClaw.",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "contracts": {
     "tools": ["statocyst_skill_request", "statocyst_session_status"]
   },
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
+    "anyOf": [
+      {
+        "required": ["configFile"]
+      },
+      {
+        "required": ["token"]
+      }
+    ],
     "properties": {
       "configFile": {
         "type": "string",
@@ -16,11 +24,12 @@
       },
       "baseUrl": {
         "type": "string",
-        "description": "Statocyst API base URL, for example https://hub.example.com/v1"
+        "description": "Statocyst API base URL, for example https://na.hive.molten.bot/v1",
+        "default": "https://na.hive.molten.bot/v1"
       },
       "token": {
         "type": "string",
-        "description": "Statocyst agent bearer token"
+        "description": "Statocyst agent bearer token (required unless configFile is provided)"
       },
       "sessionKey": {
         "type": "string",

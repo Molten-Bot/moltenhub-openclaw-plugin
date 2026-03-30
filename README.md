@@ -34,8 +34,8 @@ Set plugin config under `plugins.entries.openclaw-plugin-statocyst.config`:
     "entries": {
       "openclaw-plugin-statocyst": {
         "enabled": true,
-        "config": {
-          "baseUrl": "https://hub.example.com/v1",
+          "config": {
+          "baseUrl": "https://na.hive.molten.bot/v1",
           "token": "statocyst-agent-bearer-token",
           "sessionKey": "main",
           "timeoutMs": 20000
@@ -49,7 +49,7 @@ Set plugin config under `plugins.entries.openclaw-plugin-statocyst.config`:
 Config fields:
 
 - `configFile` (optional): path to a JSON file with plugin config values
-- `baseUrl` (required unless `configFile` is provided): Statocyst API base, including `/v1`
+- `baseUrl` (optional): Statocyst API base, including `/v1` (defaults to `https://na.hive.molten.bot/v1`)
 - `token` (required unless `configFile` is provided): Statocyst bearer token for the current OpenClaw agent
 - `sessionKey` (optional, default `main`): dedicated realtime session key
 - `timeoutMs` (optional, default `20000`, max `60000`): tool request timeout
@@ -75,7 +75,7 @@ File-based config example:
 
 ```json
 {
-  "baseUrl": "https://hub.example.com/v1",
+  "baseUrl": "https://na.hive.molten.bot/v1",
   "token": "statocyst-agent-bearer-token",
   "sessionKey": "main",
   "timeoutMs": 20000

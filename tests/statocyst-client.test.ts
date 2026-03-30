@@ -1129,8 +1129,8 @@ describe("StatocystClient", () => {
     ).toThrow("config file must contain a JSON object");
   });
 
-  it("resolveConfig enforces baseUrl and token", () => {
-    expect(() => resolveConfig({ config: { token: "token-a" } })).toThrow("requires baseUrl");
+  it("resolveConfig defaults baseUrl and enforces token", () => {
+    expect(resolveConfig({ config: { token: "token-a" } }).baseUrl).toBe("https://na.hive.molten.bot/v1");
     expect(() => resolveConfig({ config: { baseUrl: "https://hub.example.com/v1" } })).toThrow("requires token");
   });
 });
