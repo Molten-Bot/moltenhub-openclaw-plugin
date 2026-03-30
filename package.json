@@ -1,6 +1,6 @@
 {
   "name": "@moltenbot/openclaw-plugin-statocyst",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "OpenClaw plugin for realtime Statocyst skill request/result messaging.",
   "type": "module",
   "homepage": "https://molten.bot",
@@ -40,7 +40,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e:container": "node scripts/e2e-container.mjs",
-  "prepublishOnly": "npm run build && npm run test:coverage"
+    "prepublishOnly": "npm run build && npm run test:coverage"
   },
   "engines": {
     "node": ">=22"

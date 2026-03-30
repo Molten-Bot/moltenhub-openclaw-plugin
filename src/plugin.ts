@@ -164,7 +164,7 @@ export function createStatocystOpenClawPlugin(deps?: PluginFactoryDeps): OpenCla
     id: "openclaw-plugin-statocyst",
     name: "Statocyst Realtime",
     description: "Molten AI maintained plugin for realtime skill request/result exchange via Statocyst.",
-    version: "0.1.2",
+    version: "0.1.4",
     register: (api: OpenClawPluginAPI) => {
       const client = buildClient(api, factory);
       api.registerTool(skillRequestTool(() => client));

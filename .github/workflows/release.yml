@@ -43,15 +43,29 @@ jobs:
           echo "version=${PACKAGE_VERSION}" >> "${GITHUB_OUTPUT}"
 
           if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
-            echo "should_publish=false" >> "${GITHUB_OUTPUT}"
-            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already exists. Skipping publish."
+            echo "should_publish_npm=false" >> "${GITHUB_OUTPUT}"
+            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already exists on npm. Skipping npm publish."
           else
-            echo "should_publish=true" >> "${GITHUB_OUTPUT}"
-            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} does not exist. Publishing."
+            echo "should_publish_npm=true" >> "${GITHUB_OUTPUT}"
+            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} does not exist on npm. Publishing."
+          fi
+
+          CLAWHUB_LATEST="$(npx -y clawhub@latest package inspect "${PACKAGE_NAME}" 2>/dev/null | sed -n 's/^Latest: //p' | head -n 1 || true)"
+          echo "clawhub_latest=${CLAWHUB_LATEST}" >> "${GITHUB_OUTPUT}"
+
+          if [ -z "${CLAWHUB_LATEST}" ]; then
+            echo "should_publish_clawhub=true" >> "${GITHUB_OUTPUT}"
+            echo "${PACKAGE_NAME} was not found on ClawHub. Publishing."
+          elif [ "${CLAWHUB_LATEST}" = "${PACKAGE_VERSION}" ]; then
+            echo "should_publish_clawhub=false" >> "${GITHUB_OUTPUT}"
+            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already exists on ClawHub. Skipping ClawHub publish."
+          else
+            echo "should_publish_clawhub=true" >> "${GITHUB_OUTPUT}"
+            echo "ClawHub latest is ${CLAWHUB_LATEST}, local is ${PACKAGE_VERSION}. Publishing update."
           fi
 
       - name: Publish to npm
-        if: steps.package.outputs.should_publish == 'true'
+        if: steps.package.outputs.should_publish_npm == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -61,3 +75,23 @@ jobs:
             exit 1
           fi
           npm publish --access public
+
+      - name: Publish to ClawHub
+        if: steps.package.outputs.should_publish_clawhub == 'true'
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLAWHUB_TOKEN:-}" ]; then
+            echo "CLAWHUB_TOKEN secret is not configured."
+            exit 1
+          fi
+          npx -y clawhub@latest auth login --token "${CLAWHUB_TOKEN}" --no-browser
+          npx -y clawhub@latest --no-input package publish . \
+            --name "${{ steps.package.outputs.name }}" \
+            --version "${{ steps.package.outputs.version }}" \
+            --tags latest \
+            --source-repo "${GITHUB_REPOSITORY}" \
+            --source-commit "${GITHUB_SHA}" \
+            --source-ref "${GITHUB_REF_NAME}" \
+            --source-path "."
