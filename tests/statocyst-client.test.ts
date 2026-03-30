@@ -1131,6 +1131,9 @@ describe("StatocystClient", () => {
 
   it("resolveConfig defaults baseUrl and enforces token", () => {
     expect(resolveConfig({ config: { token: "token-a" } }).baseUrl).toBe("https://na.hive.molten.bot/v1");
+    expect(resolveConfig({ config: { baseUrl: "   ", token: "token-b" } }).baseUrl).toBe(
+      "https://na.hive.molten.bot/v1"
+    );
     expect(() => resolveConfig({ config: { baseUrl: "https://hub.example.com/v1" } })).toThrow("requires token");
   });
 });

@@ -433,7 +433,7 @@ function normalizeWSRawData(raw: unknown): string {
 function normalizeBaseURL(raw: string): string {
   const trimmed = trimOrEmpty(raw);
   if (!trimmed) {
-    return "";
+    return defaultStatocystBaseURL;
   }
   return trimmed.replace(/\/+$/, "");
 }
