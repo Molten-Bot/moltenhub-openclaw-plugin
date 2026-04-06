@@ -253,6 +253,67 @@ describe("MoltenHubClient", () => {
     expect((publishCall?.body?.message as Record<string, unknown>).reply_required).toBe(true);
   });
 
+  it("returns async dispatch warnings and supports uri-only targets", async () => {
+    const calls: Array<{ method: string; path: string; body?: Record<string, unknown> }> = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const requestURL = new URL(String(input));
+      const method = String(init?.method ?? "GET");
+      const rawBody = typeof init?.body === "string" ? init.body : "";
+      const body = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : undefined;
+      calls.push({
+        method,
+        path: `${requestURL.pathname}${requestURL.search}`,
+        body
+      });
+
+      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/publish") {
+        return new Response(JSON.stringify({ ok: true, result: { message_id: "message-async-2" } }), {
+          status: 200
+        });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    const socket = new FakeWebSocket();
+    const client = new MoltenHubClient(testConfig(), {
+      fetchImpl,
+      randomID: () => "req-async-2",
+      wsFactory: () => {
+        openAndReady(socket);
+        return socket;
+      }
+    });
+
+    const result = await client.requestSkillExecution({
+      toAgentURI: "https://example.test/agents/peer-2",
+      skillName: "schedule_task",
+      payload: {
+        note: "api key placeholder"
+      },
+      awaitResult: false
+    });
+
+    expect(result).toMatchObject({
+      mode: "async",
+      requestId: "req-async-2",
+      skillName: "schedule_task",
+      status: "queued",
+      messageId: "message-async-2",
+      warnings: [
+        {
+          fieldPath: "$.payload.note",
+          marker: "api key"
+        }
+      ]
+    });
+
+    const publishCall = calls.find((entry) => entry.method === "POST" && entry.path === "/v1/openclaw/messages/publish");
+    expect(publishCall).toBeDefined();
+    expect(publishCall?.body?.to_agent_uuid).toBeUndefined();
+    expect(publishCall?.body?.to_agent_uri).toBe("https://example.test/agents/peer-2");
+  });
+
   it("sends markdown skill payload when requested", async () => {
     let sentSkillRequest: Record<string, unknown> | undefined;
 
