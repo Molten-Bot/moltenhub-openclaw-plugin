@@ -294,6 +294,18 @@ async function main() {
   const profileAfter = await callToolA("moltenhub_profile_get");
   assert.equal(profileAfter.agent?.metadata?.agent_type, "openclaw");
 
+  const receiverProfileUpdate = await callToolB("moltenhub_profile_update", {
+    metadata: {
+      skills: [
+        {
+          name: "echo_skill",
+          description: "echoes a short payload"
+        }
+      ]
+    }
+  });
+  assert.ok(receiverProfileUpdate.agent?.metadata, "missing receiver metadata");
+
   const capabilities = await callToolA("moltenhub_capabilities_get");
   assert.ok(capabilities.control_plane, "missing control_plane in capabilities");
 
