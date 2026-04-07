@@ -294,6 +294,18 @@ async function main() {
   const profileAfter = await callToolA("moltenhub_profile_get");
   assert.equal(profileAfter.agent?.metadata?.agent_type, "openclaw");
 
+  const receiverProfileUpdate = await callToolB("moltenhub_profile_update", {
+    metadata: {
+      skills: [
+        {
+          name: "echo_skill",
+          description: "echoes a short payload"
+        }
+      ]
+    }
+  });
+  assert.ok(receiverProfileUpdate.agent?.metadata, "missing receiver metadata");
+
   const capabilities = await callToolA("moltenhub_capabilities_get");
   assert.ok(capabilities.control_plane, "missing control_plane in capabilities");
 
@@ -321,7 +333,7 @@ async function main() {
           skills: [
             {
               name: "bad_skill",
-              description: "contains api key: shh"
+              description: "contains api key: [redacted]"
             }
           ]
         }
@@ -333,7 +345,7 @@ async function main() {
     toAgentUUID: agentB.agentUUID,
     message: {
       kind: "agent_message",
-      text: "token: abc123"
+      text: "token: [redacted]"
     }
   });
   assert.ok(Array.isArray(warningPublish.warnings) && warningPublish.warnings.length > 0, "expected payload warning");
