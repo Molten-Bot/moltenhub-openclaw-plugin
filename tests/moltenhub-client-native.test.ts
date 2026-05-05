@@ -631,6 +631,70 @@ describe("MoltenHubClient native runtime", () => {
     expect(harness.calls.map((call) => `${call.method} ${call.path}`)).toContain("POST /v1/openclaw/messages/publish");
   });
 
+  it("falls back to legacy OpenClaw routes for runtime unsupported status and error codes", async () => {
+    const cases = [
+      { status: 405, payload: { error: "method_not_allowed" } },
+      { status: 501, payload: { error: "not_implemented" } },
+      { status: 500, payload: { error: "not_found" } },
+      { status: 500, payload: { error: { code: "route_not_found", message: "missing route" } } },
+      { status: 500, payload: { error: { code: "method_not_allowed", message: "missing method" } } },
+      { status: 500, payload: { error: { code: "not_implemented", message: "missing implementation" } } }
+    ];
+
+    for (const testCase of cases) {
+      const harness = createHarness({
+        config: {
+          profile: {
+            enabled: false,
+            syncIntervalMs: 300_000
+          }
+        }
+      });
+
+      harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
+      harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=5000", () =>
+        jsonResponse(testCase.payload, testCase.status)
+      );
+      harness.route("GET", "/v1/openclaw/messages/pull?timeout_ms=5000", () =>
+        jsonResponse({ ok: true, result: { delivery_id: `legacy-${testCase.status}` } })
+      );
+
+      const result = await harness.client.openClawPull({});
+
+      expect(result.delivery_id).toBe(`legacy-${testCase.status}`);
+      expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
+        "GET /v1/runtime/messages/pull?timeout_ms=5000"
+      );
+      expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
+        "GET /v1/openclaw/messages/pull?timeout_ms=5000"
+      );
+    }
+  });
+
+  it("does not use legacy OpenClaw fallback for runtime network errors", async () => {
+    const harness = createHarness({
+      config: {
+        profile: {
+          enabled: false,
+          syncIntervalMs: 300_000
+        }
+      }
+    });
+
+    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
+    harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=5000", () => {
+      throw new Error("network unavailable");
+    });
+
+    await expect(harness.client.openClawPull({})).rejects.toThrow("network unavailable");
+    expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
+      "GET /v1/runtime/messages/pull?timeout_ms=5000"
+    );
+    expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).not.toContain(
+      "GET /v1/openclaw/messages/pull?timeout_ms=5000"
+    );
+  });
+
   it("handles openclaw pull timeout normalization and validation", async () => {
     const harness = createHarness({
       config: {

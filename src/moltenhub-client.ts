@@ -744,7 +744,7 @@ export class MoltenHubClient {
     }
 
     await this.ensureReady();
-    return this.runtimeEnvelopeJSON("GET", `/${encodeURIComponent(messageID)}`);
+    return this.runtimeEnvelopeJSON("GET", encodeURIComponent(messageID));
   }
 
   private async ensureReady(): Promise<void> {
