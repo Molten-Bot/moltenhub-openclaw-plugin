@@ -56,6 +56,8 @@ const defaultPluginVersion = "0.1.9";
 const defaultProfileSyncIntervalMs = 300_000;
 const defaultHealthcheckTtlMs = 30_000;
 const defaultPullTimeoutMs = 5_000;
+const runtimeMessagesPath = "/runtime/messages";
+const legacyOpenClawMessagesPath = "/openclaw/messages";
 
 const defaultSecretMarkers = [
   "api key",
@@ -411,7 +413,7 @@ export class MoltenHubClient {
     sessionKey: string;
     warnings: SecretWarning[];
   }): Promise<SkillDispatchResult> {
-    const result = await this.runtimeJSON("POST", "/openclaw/messages/publish", {
+    const result = await this.runtimeEnvelopeJSON("POST", "/publish", {
       to_agent_uuid: args.targetUUID || undefined,
       to_agent_uri: args.targetURI || undefined,
       client_msg_id: args.requestId,
@@ -545,7 +547,7 @@ export class MoltenHubClient {
       warnings: args.warnings
     };
 
-    await this.runtimeJSON("POST", "/openclaw/messages/publish", {
+    await this.runtimeEnvelopeJSON("POST", "/publish", {
       to_agent_uuid: args.targetUUID || undefined,
       to_agent_uri: args.targetURI || undefined,
       client_msg_id: args.requestId,
@@ -566,9 +568,9 @@ export class MoltenHubClient {
       }
 
       const pullTimeoutMs = Math.max(0, Math.min(defaultPullTimeoutMs, remaining));
-      const pullResult = await this.runtimeJSON(
+      const pullResult = await this.runtimeEnvelopeJSON(
         "GET",
-        `/openclaw/messages/pull?timeout_ms=${encodeURIComponent(String(pullTimeoutMs))}`,
+        `/pull?timeout_ms=${encodeURIComponent(String(pullTimeoutMs))}`,
         undefined,
         { allowNoContent: true }
       );
@@ -581,7 +583,7 @@ export class MoltenHubClient {
 
       if (matchedResult) {
         if (parsedDelivery.deliveryId) {
-          await this.runtimeJSON("POST", "/openclaw/messages/ack", {
+          await this.runtimeEnvelopeJSON("POST", "/ack", {
             delivery_id: parsedDelivery.deliveryId
           });
         }
@@ -589,7 +591,7 @@ export class MoltenHubClient {
       }
 
       if (parsedDelivery.deliveryId) {
-        await this.runtimeJSON("POST", "/openclaw/messages/nack", {
+        await this.runtimeEnvelopeJSON("POST", "/nack", {
           delivery_id: parsedDelivery.deliveryId
         });
       }
@@ -687,7 +689,7 @@ export class MoltenHubClient {
 
     await this.ensureReady();
 
-    const result = await this.runtimeJSON("POST", "/openclaw/messages/publish", {
+    const result = await this.runtimeEnvelopeJSON("POST", "/publish", {
       to_agent_uuid: targetUUID || undefined,
       to_agent_uri: targetURI || undefined,
       client_msg_id: trimOptional(request.clientMsgID),
@@ -708,7 +710,7 @@ export class MoltenHubClient {
 
     const timeoutMs = request.timeoutMs === undefined ? defaultPullTimeoutMs : normalizePullTimeout(request.timeoutMs);
     const query = `?timeout_ms=${encodeURIComponent(String(timeoutMs))}`;
-    return this.runtimeJSON("GET", `/openclaw/messages/pull${query}`, undefined, { allowNoContent: true });
+    return this.runtimeEnvelopeJSON("GET", `/pull${query}`, undefined, { allowNoContent: true });
   }
 
   async openClawAck(request: OpenClawDeliveryActionRequest): Promise<Record<string, unknown>> {
@@ -718,7 +720,7 @@ export class MoltenHubClient {
     }
 
     await this.ensureReady();
-    return this.runtimeJSON("POST", "/openclaw/messages/ack", {
+    return this.runtimeEnvelopeJSON("POST", "/ack", {
       delivery_id: deliveryID
     });
   }
@@ -730,7 +732,7 @@ export class MoltenHubClient {
     }
 
     await this.ensureReady();
-    return this.runtimeJSON("POST", "/openclaw/messages/nack", {
+    return this.runtimeEnvelopeJSON("POST", "/nack", {
       delivery_id: deliveryID
     });
   }
@@ -742,7 +744,7 @@ export class MoltenHubClient {
     }
 
     await this.ensureReady();
-    return this.runtimeJSON("GET", `/openclaw/messages/${encodeURIComponent(messageID)}`);
+    return this.runtimeEnvelopeJSON("GET", encodeURIComponent(messageID));
   }
 
   private async ensureReady(): Promise<void> {
@@ -986,7 +988,19 @@ export class MoltenHubClient {
 
   private async openSession(sessionKey: string, timeoutMs: number): Promise<WebSocketSession> {
     const wsBase = this.config.baseUrl.replace(/^http/i, "ws");
-    const wsURL = `${wsBase}/openclaw/messages/ws?session_key=${encodeURIComponent(sessionKey)}`;
+    const wsURL = `${wsBase}${runtimeMessagesPath}/ws?session_key=${encodeURIComponent(sessionKey)}`;
+    try {
+      return await this.openSessionAtURL(wsURL, timeoutMs);
+    } catch (error) {
+      if (!this.isWebSocketRouteUnsupported(error)) {
+        throw error;
+      }
+      const legacyURL = `${wsBase}${legacyOpenClawMessagesPath}/ws?session_key=${encodeURIComponent(sessionKey)}`;
+      return this.openSessionAtURL(legacyURL, timeoutMs);
+    }
+  }
+
+  private async openSessionAtURL(wsURL: string, timeoutMs: number): Promise<WebSocketSession> {
     const socket = this.deps.wsFactory(wsURL, {
       Authorization: `Bearer ${this.config.token}`
     });
@@ -1068,7 +1082,9 @@ export class MoltenHubClient {
 
   private parseDeliveryRecord(record: Record<string, unknown>): ParsedDelivery {
     const messageRecord = readObject(record.message);
-    const primaryMessage = readObject(record.openclaw_message);
+    const envelopeMessage = readObject(record.envelope);
+    const openClawMessage = readObject(record.openclaw_message);
+    const primaryMessage = Object.keys(envelopeMessage).length > 0 ? envelopeMessage : openClawMessage;
     const message =
       Object.keys(primaryMessage).length > 0
         ? primaryMessage
@@ -1186,6 +1202,23 @@ export class MoltenHubClient {
     }
 
     return parsedObject;
+  }
+
+  private async runtimeEnvelopeJSON(
+    method: "GET" | "POST",
+    path: string,
+    body?: Record<string, unknown>,
+    options?: RuntimeRequestOptions
+  ): Promise<Record<string, unknown>> {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    try {
+      return await this.runtimeJSON(method, `${runtimeMessagesPath}${normalizedPath}`, body, options);
+    } catch (error) {
+      if (!isRuntimeEnvelopeRouteUnsupported(error)) {
+        throw error;
+      }
+      return this.runtimeJSON(method, `${legacyOpenClawMessagesPath}${normalizedPath}`, body, options);
+    }
   }
 
   private async runtimeText(path: string): Promise<string> {
@@ -1709,6 +1742,21 @@ function parseRuntimeError(status: number, bodyText: string): MoltenHubAPIError 
   const message = nestedMessage || topLevelMessage || fallbackMessage;
 
   return new MoltenHubAPIError(message, status, code, topLevelRetryable, topLevelNextAction);
+}
+
+function isRuntimeEnvelopeRouteUnsupported(error: unknown): boolean {
+  if (!(error instanceof MoltenHubAPIError)) {
+    return false;
+  }
+  if (error.status === 404 || error.status === 405 || error.status === 501) {
+    return true;
+  }
+  return (
+    error.code === "not_found" ||
+    error.code === "route_not_found" ||
+    error.code === "method_not_allowed" ||
+    error.code === "not_implemented"
+  );
 }
 
 function tryParseJSON(raw: string): unknown {

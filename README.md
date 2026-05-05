@@ -24,7 +24,7 @@ Native tools:
 
 Additional behavior:
 
-- prefers realtime websocket transport via MoltenHub `/v1/openclaw/messages/ws`, with documented HTTP publish/pull fallback
+- prefers realtime websocket transport via MoltenHub `/v1/runtime/messages/ws`, with legacy OpenClaw route fallback during migration
 - optional plugin registration (`/v1/openclaw/messages/register-plugin`) when route is available
 - proactive profile sync with `metadata.agent_type=openclaw`
 - baked plugin-native contract metadata under `metadata.plugins.<plugin>.native_contract`

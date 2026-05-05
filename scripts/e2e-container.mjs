@@ -75,8 +75,8 @@ async function createOrg(humanID, email, handle, displayName) {
 async function registerAgent(humanID, email, orgID, handle) {
   const tokenPayload = await httpJSON(
     "POST",
-    "/v1/agents/bind-tokens",
-    { org_id: orgID },
+    `/v1/orgs/${encodeURIComponent(orgID)}/agents/bind-tokens`,
+    {},
     humanHeaders(humanID, email)
   );
   const bindToken = tokenPayload?.bind_token;
@@ -214,13 +214,13 @@ async function waitForHealth() {
   throw new Error(`moltenhub container did not become healthy at ${baseURL}/health`);
 }
 
-async function ensureOpenClawRealtimeRoutes() {
-  const wsResponse = await fetch(`${baseURL}/v1/openclaw/messages/ws`);
+async function ensureRuntimeRealtimeRoutes() {
+  const wsResponse = await fetch(`${baseURL}/v1/runtime/messages/ws`);
   if (wsResponse.status !== 404) {
     return;
   }
   throw new Error(
-    `moltenhub image "${moltenhubImage}" does not expose /v1/openclaw/messages/ws; set MOLTENHUB_IMAGE to a build containing realtime OpenClaw routes`
+    `moltenhub image "${moltenhubImage}" does not expose /v1/runtime/messages/ws; set MOLTENHUB_IMAGE to a build containing realtime runtime routes`
   );
 }
 
@@ -246,7 +246,7 @@ async function main() {
   ]);
 
   await waitForHealth();
-  await ensureOpenClawRealtimeRoutes();
+  await ensureRuntimeRealtimeRoutes();
 
   const alice = { id: "alice", email: "alice@e2e.test" };
   const bob = { id: "bob", email: "bob@e2e.test" };
