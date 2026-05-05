@@ -155,7 +155,7 @@ const openClawPublishInputSchema: Record<string, unknown> = {
     },
     message: {
       type: "object",
-      description: "OpenClaw JSON envelope payload"
+      description: "Runtime envelope payload"
     }
   }
 };
@@ -442,7 +442,7 @@ function openClawPublishTool(client: () => MoltenHubClientContract): OpenClawToo
   return {
     name: "moltenhub_openclaw_publish",
     description:
-      "Publish an OpenClaw JSON envelope to a trusted peer via MoltenHub adapter routes. Secret-like payload markers produce warnings without blocking send.",
+      "Publish a runtime envelope to a trusted peer via MoltenHub runtime transport. Secret-like payload markers produce warnings without blocking send.",
     parameters: openClawPublishInputSchema,
     execute: async (_callID, params) => {
       const request = parseOpenClawPublishRequest(asRecord(params));
@@ -455,7 +455,7 @@ function openClawPublishTool(client: () => MoltenHubClientContract): OpenClawToo
 function openClawPullTool(client: () => MoltenHubClientContract): OpenClawToolDefinition {
   return {
     name: "moltenhub_openclaw_pull",
-    description: "Pull the next OpenClaw delivery for this agent with optional long-poll timeout.",
+    description: "Pull the next runtime delivery for this agent with optional long-poll timeout.",
     parameters: openClawPullInputSchema,
     execute: async (_callID, params) => {
       const request = parseOpenClawPullRequest(asRecord(params));
@@ -468,7 +468,7 @@ function openClawPullTool(client: () => MoltenHubClientContract): OpenClawToolDe
 function openClawAckTool(client: () => MoltenHubClientContract): OpenClawToolDefinition {
   return {
     name: "moltenhub_openclaw_ack",
-    description: "Acknowledge a leased OpenClaw delivery id.",
+    description: "Acknowledge a leased runtime delivery id.",
     parameters: openClawAckInputSchema,
     execute: async (_callID, params) => {
       const request = parseOpenClawDeliveryActionRequest(asRecord(params));
@@ -481,7 +481,7 @@ function openClawAckTool(client: () => MoltenHubClientContract): OpenClawToolDef
 function openClawNackTool(client: () => MoltenHubClientContract): OpenClawToolDefinition {
   return {
     name: "moltenhub_openclaw_nack",
-    description: "Release a leased OpenClaw delivery id back to queue.",
+    description: "Release a leased runtime delivery id back to queue.",
     parameters: openClawNackInputSchema,
     execute: async (_callID, params) => {
       const request = parseOpenClawDeliveryActionRequest(asRecord(params));
@@ -494,7 +494,7 @@ function openClawNackTool(client: () => MoltenHubClientContract): OpenClawToolDe
 function openClawStatusTool(client: () => MoltenHubClientContract): OpenClawToolDefinition {
   return {
     name: "moltenhub_openclaw_status",
-    description: "Read OpenClaw message status for a given message id.",
+    description: "Read runtime message status for a given message id.",
     parameters: openClawStatusInputSchema,
     execute: async (_callID, params) => {
       const request = parseOpenClawStatusRequest(asRecord(params));
@@ -519,7 +519,7 @@ export function createMoltenHubOpenClawPlugin(deps?: PluginFactoryDeps): OpenCla
     id: "openclaw-plugin-moltenhub",
     name: "MoltenHub Realtime",
     description:
-      "Molten AI maintained plugin for native MoltenHub interaction: realtime skill exchange, OpenClaw adapter routes, profile/capability discovery, and safety guardrails.",
+      "Molten AI maintained plugin for native MoltenHub interaction: realtime skill exchange, runtime transport, profile/capability discovery, and safety guardrails.",
     version: "0.2.0",
     register: (api: OpenClawPluginAPI) => {
       const client = buildClient(api, factory);

@@ -362,10 +362,10 @@ async function main() {
     }
   });
   const messageID = publishResult?.message_id;
-  assert.ok(messageID, "missing message_id from openclaw publish");
+  assert.ok(messageID, "missing message_id from runtime publish");
 
   const baselinePull = await callToolB("moltenhub_openclaw_pull", { timeoutMs: 1_000 });
-  assert.ok(baselinePull && typeof baselinePull === "object", "missing openclaw pull response");
+  assert.ok(baselinePull && typeof baselinePull === "object", "missing runtime pull response");
 
   const statusResult = await callToolA("moltenhub_openclaw_status", { messageId: messageID });
   assert.ok(statusResult.message || statusResult.message_id, "missing message status result");

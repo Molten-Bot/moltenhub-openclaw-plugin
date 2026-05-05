@@ -57,7 +57,6 @@ const defaultProfileSyncIntervalMs = 300_000;
 const defaultHealthcheckTtlMs = 30_000;
 const defaultPullTimeoutMs = 5_000;
 const runtimeMessagesPath = "/runtime/messages";
-const legacyOpenClawMessagesPath = "/openclaw/messages";
 
 const defaultSecretMarkers = [
   "api key",
@@ -195,7 +194,6 @@ export class MoltenHubClient {
   private lastSessionCheckAt = 0;
   private lastProfileSyncAt = 0;
   private handleFinalizeAttempted = false;
-  private pluginRegistrationSupported = true;
   private cachedSessionStatus: SessionStatusResult | null = null;
   private profileSyncInFlight: Promise<void> | null = null;
 
@@ -208,39 +206,10 @@ export class MoltenHubClient {
   }
 
   async registerPlugin(): Promise<boolean> {
-    if (!this.pluginRegistrationSupported) {
-      return false;
-    }
-
-    const response = await this.deps.fetchImpl(`${this.config.baseUrl}/openclaw/messages/register-plugin`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.token}`
-      },
-      body: JSON.stringify({
-        plugin_id: this.config.pluginId,
-        package: this.config.pluginPackage,
-        version: this.config.pluginVersion,
-        transport: "websocket",
-        session_mode: "dedicated",
-        session_key: this.config.sessionKey
-      })
-    });
-
-    if (!response.ok) {
-      const body = await safeReadText(response);
-      if (this.isRegistrationRouteUnsupported(response.status, body)) {
-        this.pluginRegistrationSupported = false;
-        return false;
-      }
-      throw new Error(`moltenhub plugin registration failed (${response.status}): ${body}`);
-    }
-    return true;
+    return false;
   }
 
   async checkSession(): Promise<SessionStatusResult> {
-    await this.registerPlugin();
     return this.checkSessionAfterRegistration();
   }
 
@@ -255,20 +224,11 @@ export class MoltenHubClient {
     let canCommunicate: boolean | undefined;
     let sessionTransport: ReadinessCheckResult["transport"] = "websocket";
 
-    try {
-      const registered = await this.registerPlugin();
-      if (registered) {
-        checks.pluginRegistration = readinessItem(true);
-      } else {
-        checks.pluginRegistration = readinessItem(
-          true,
-          "registration route unavailable; continuing without explicit plugin registration",
-          true
-        );
-      }
-    } catch (error) {
-      checks.pluginRegistration = readinessItem(false, String(error));
-    }
+    checks.pluginRegistration = readinessItem(
+      true,
+      "plugin registration retired; using runtime bind/token/profile/capability surfaces",
+      true
+    );
 
     if (!this.config.profile.enabled) {
       checks.profileSync = readinessItem(true, undefined, true);
@@ -434,7 +394,7 @@ export class MoltenHubClient {
       messageId: trimOrEmpty(result.message_id),
       warnings: args.warnings.length > 0 ? args.warnings : undefined,
       nextAction:
-        "Skill request dispatched asynchronously; use moltenhub_openclaw_pull for skill_result delivery or moltenhub_openclaw_status with messageId."
+        "Skill request dispatched asynchronously; use the runtime pull or status transport tools for skill_result delivery."
     };
   }
 
@@ -748,7 +708,6 @@ export class MoltenHubClient {
   }
 
   private async ensureReady(): Promise<void> {
-    await this.registerPlugin();
     await this.syncProfileIfDue(false);
     await this.ensureSessionHealthy(false);
   }
@@ -792,23 +751,6 @@ export class MoltenHubClient {
       this.lastSessionCheckAt = Date.now();
       return status;
     }
-  }
-
-  private isRegistrationRouteUnsupported(status: number, body: string): boolean {
-    if (status === 404 || status === 405 || status === 501) {
-      return true;
-    }
-    const parsed = readObject(tryParseJSON(body));
-    const errorObject = readObject(parsed.error);
-    const detailObject = readObject(parsed.error_detail);
-    const code =
-      trimOrEmpty(parsed.error) || trimOrEmpty(errorObject.code) || trimOrEmpty(detailObject.code) || "";
-    return (
-      code === "not_found" ||
-      code === "route_not_found" ||
-      code === "method_not_allowed" ||
-      code === "not_implemented"
-    );
   }
 
   private isWebSocketRouteUnsupported(error: unknown): boolean {
@@ -989,15 +931,7 @@ export class MoltenHubClient {
   private async openSession(sessionKey: string, timeoutMs: number): Promise<WebSocketSession> {
     const wsBase = this.config.baseUrl.replace(/^http/i, "ws");
     const wsURL = `${wsBase}${runtimeMessagesPath}/ws?session_key=${encodeURIComponent(sessionKey)}`;
-    try {
-      return await this.openSessionAtURL(wsURL, timeoutMs);
-    } catch (error) {
-      if (!this.isWebSocketRouteUnsupported(error)) {
-        throw error;
-      }
-      const legacyURL = `${wsBase}${legacyOpenClawMessagesPath}/ws?session_key=${encodeURIComponent(sessionKey)}`;
-      return this.openSessionAtURL(legacyURL, timeoutMs);
-    }
+    return this.openSessionAtURL(wsURL, timeoutMs);
   }
 
   private async openSessionAtURL(wsURL: string, timeoutMs: number): Promise<WebSocketSession> {
@@ -1083,11 +1017,9 @@ export class MoltenHubClient {
   private parseDeliveryRecord(record: Record<string, unknown>): ParsedDelivery {
     const messageRecord = readObject(record.message);
     const envelopeMessage = readObject(record.envelope);
-    const openClawMessage = readObject(record.openclaw_message);
-    const primaryMessage = Object.keys(envelopeMessage).length > 0 ? envelopeMessage : openClawMessage;
     const message =
-      Object.keys(primaryMessage).length > 0
-        ? primaryMessage
+      Object.keys(envelopeMessage).length > 0
+        ? envelopeMessage
         : trimOrEmpty(messageRecord.kind)
           ? messageRecord
           : {};
@@ -1211,14 +1143,7 @@ export class MoltenHubClient {
     options?: RuntimeRequestOptions
   ): Promise<Record<string, unknown>> {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-    try {
-      return await this.runtimeJSON(method, `${runtimeMessagesPath}${normalizedPath}`, body, options);
-    } catch (error) {
-      if (!isRuntimeEnvelopeRouteUnsupported(error)) {
-        throw error;
-      }
-      return this.runtimeJSON(method, `${legacyOpenClawMessagesPath}${normalizedPath}`, body, options);
-    }
+    return this.runtimeJSON(method, `${runtimeMessagesPath}${normalizedPath}`, body, options);
   }
 
   private async runtimeText(path: string): Promise<string> {
@@ -1742,21 +1667,6 @@ function parseRuntimeError(status: number, bodyText: string): MoltenHubAPIError 
   const message = nestedMessage || topLevelMessage || fallbackMessage;
 
   return new MoltenHubAPIError(message, status, code, topLevelRetryable, topLevelNextAction);
-}
-
-function isRuntimeEnvelopeRouteUnsupported(error: unknown): boolean {
-  if (!(error instanceof MoltenHubAPIError)) {
-    return false;
-  }
-  if (error.status === 404 || error.status === 405 || error.status === 501) {
-    return true;
-  }
-  return (
-    error.code === "not_found" ||
-    error.code === "route_not_found" ||
-    error.code === "method_not_allowed" ||
-    error.code === "not_implemented"
-  );
 }
 
 function tryParseJSON(raw: string): unknown {

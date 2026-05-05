@@ -142,12 +142,6 @@ describe("MoltenHubClient", () => {
                   request_id: "req-1",
                   status: "ok",
                   output: { weather: "sunny" }
-                },
-                openclaw_message: {
-                  kind: "skill_result",
-                  request_id: "req-1",
-                  status: "ok",
-                  output: { weather: "legacy-rain" }
                 }
               }
             }),
@@ -248,7 +242,7 @@ describe("MoltenHubClient", () => {
       messageId: "message-async-1",
       warnings: undefined,
       nextAction:
-        "Skill request dispatched asynchronously; use moltenhub_openclaw_pull for skill_result delivery or moltenhub_openclaw_status with messageId."
+        "Skill request dispatched asynchronously; use the runtime pull or status transport tools for skill_result delivery."
     });
 
     const publishCall = calls.find((entry) => entry.method === "POST" && entry.path === "/v1/runtime/messages/publish");
@@ -338,7 +332,7 @@ describe("MoltenHubClient", () => {
           result: {
             message: { message_id: "message-markdown" },
             delivery: { delivery_id: "delivery-markdown" },
-            openclaw_message: {
+            envelope: {
               kind: "skill_result",
               request_id: "req-markdown",
               status: "ok",
@@ -444,7 +438,7 @@ describe("MoltenHubClient", () => {
           result: {
             message: { message_id: "message-json-string" },
             delivery: { delivery_id: "delivery-json-string" },
-            openclaw_message: {
+            envelope: {
               kind: "skill_result",
               request_id: "req-json-string",
               status: "ok",
@@ -503,7 +497,7 @@ describe("MoltenHubClient", () => {
           result: {
             message: { message_id: "message-inferred-markdown" },
             delivery: { delivery_id: "delivery-inferred-markdown" },
-            openclaw_message: {
+            envelope: {
               kind: "skill_result",
               request_id: "req-inferred-markdown",
               status: "ok",
@@ -560,7 +554,7 @@ describe("MoltenHubClient", () => {
           result: {
             message: { message_id: "message-empty-markdown" },
             delivery: { delivery_id: "delivery-empty-markdown" },
-            openclaw_message: {
+            envelope: {
               kind: "skill_result",
               request_id: "req-empty-markdown",
               status: "ok",
@@ -616,7 +610,7 @@ describe("MoltenHubClient", () => {
           result: {
             message: { message_id: "message-x" },
             delivery: { delivery_id: "delivery-x" },
-            openclaw_message: {
+            envelope: {
               kind: "skill_result",
               request_id: "different-request",
               status: "ok",
@@ -629,7 +623,7 @@ describe("MoltenHubClient", () => {
           result: {
             message: { message_id: "message-y" },
             delivery: { delivery_id: "delivery-y" },
-            openclaw_message: {
+            envelope: {
               kind: "skill_result",
               request_id: "req-2",
               status: "ok",
@@ -680,7 +674,7 @@ describe("MoltenHubClient", () => {
           result: {
             message: { message_id: "message-pre-response" },
             delivery: { delivery_id: "delivery-pre-response" },
-            openclaw_message: {
+            envelope: {
               kind: "skill_result",
               request_id: "req-pre-response",
               status: "ok",
@@ -911,7 +905,7 @@ describe("MoltenHubClient", () => {
           result: {
             message: { message_id: "message-generated" },
             delivery: { delivery_id: "delivery-generated" },
-            openclaw_message: {
+            envelope: {
               kind: "skill_result",
               request_id: generatedRequestID,
               status: "ok",
@@ -1160,7 +1154,7 @@ describe("MoltenHubClient", () => {
     await expect(client.checkSession()).rejects.toThrow();
   });
 
-  it("falls back to openclaw publish/pull when websocket route is unavailable", async () => {
+  it("falls back to runtime publish/pull when websocket route is unavailable", async () => {
     const calls: Array<{ method: string; path: string; body: unknown }> = [];
 
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1170,18 +1164,6 @@ describe("MoltenHubClient", () => {
       const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
       calls.push({ method, path, body });
 
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/register-plugin") {
-        return new Response(
-          JSON.stringify({
-            error: "route_not_found",
-            error_detail: {
-              code: "route_not_found",
-              message: "missing route"
-            }
-          }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
-        );
-      }
       if (method === "GET" && requestURL.pathname === "/v1/agents/me/capabilities") {
         return new Response(JSON.stringify({ ok: true, result: { can_communicate: true } }), {
           status: 200,
@@ -1201,7 +1183,7 @@ describe("MoltenHubClient", () => {
             result: {
               message: { message_id: "message-http" },
               delivery: { delivery_id: "delivery-http" },
-              openclaw_message: {
+              envelope: {
                 kind: "skill_result",
                 request_id: "req-http",
                 status: "ok",
@@ -1264,10 +1246,9 @@ describe("MoltenHubClient", () => {
       messageId: "message-http",
       deliveryId: "delivery-http"
     });
-    expect(wsFactory).toHaveBeenCalledTimes(2);
+    expect(wsFactory).toHaveBeenCalledTimes(1);
     expect(wsFactory.mock.calls.map((call) => call[0])).toEqual([
-      "ws://127.0.0.1:8080/v1/runtime/messages/ws?session_key=main",
-      "ws://127.0.0.1:8080/v1/openclaw/messages/ws?session_key=main"
+      "ws://127.0.0.1:8080/v1/runtime/messages/ws?session_key=main"
     ]);
     expect(
       calls.some((call) => call.method === "POST" && call.path === "/v1/runtime/messages/publish")
@@ -1290,12 +1271,6 @@ describe("MoltenHubClient", () => {
       const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
       calls.push({ method, path, body });
 
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/register-plugin") {
-        return new Response(JSON.stringify({ ok: true, result: {} }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
       if (method === "POST" && requestURL.pathname === "/v1/runtime/messages/publish") {
         return new Response(JSON.stringify({ ok: true, result: { message_id: "message-mid-fallback" } }), {
           status: 202,
@@ -1343,7 +1318,7 @@ describe("MoltenHubClient", () => {
             result: {
               message: { message_id: "message-final-mid-fallback" },
               delivery: { delivery_id: "delivery-final-mid-fallback" },
-              openclaw_message: {
+              envelope: {
                 kind: "skill_result",
                 request_id: "req-mid-fallback",
                 status: "ok",
@@ -1415,7 +1390,7 @@ describe("MoltenHubClient", () => {
       messageId: "message-final-mid-fallback",
       deliveryId: "delivery-final-mid-fallback"
     });
-    expect(wsFactory).toHaveBeenCalledTimes(3);
+    expect(wsFactory).toHaveBeenCalledTimes(2);
     expect(calls.filter((call) => call.method === "POST" && call.path === "/v1/runtime/messages/nack")).toHaveLength(2);
     expect(calls.filter((call) => call.method === "POST" && call.path === "/v1/runtime/messages/ack")).toHaveLength(1);
   });
@@ -1424,19 +1399,6 @@ describe("MoltenHubClient", () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const requestURL = new URL(String(input));
       const method = (init?.method ?? "GET").toUpperCase();
-
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/register-plugin") {
-        return new Response(
-          JSON.stringify({
-            error: "route_not_found",
-            error_detail: {
-              code: "route_not_found",
-              message: "missing route"
-            }
-          }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
-        );
-      }
       if (method === "GET" && requestURL.pathname === "/v1/agents/me/capabilities") {
         return new Response(
           JSON.stringify({
@@ -1488,19 +1450,6 @@ describe("MoltenHubClient", () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const requestURL = new URL(String(input));
       const method = (init?.method ?? "GET").toUpperCase();
-
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/register-plugin") {
-        return new Response(
-          JSON.stringify({
-            error: "route_not_found",
-            error_detail: {
-              code: "route_not_found",
-              message: "missing route"
-            }
-          }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
-        );
-      }
       if (method === "GET" && requestURL.pathname === "/v1/agents/me/capabilities") {
         return new Response(JSON.stringify({ ok: true, result: {} }), {
           status: 200,
@@ -1558,19 +1507,6 @@ describe("MoltenHubClient", () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const requestURL = new URL(String(input));
       const method = (init?.method ?? "GET").toUpperCase();
-
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/register-plugin") {
-        return new Response(
-          JSON.stringify({
-            error: "route_not_found",
-            error_detail: {
-              code: "route_not_found",
-              message: "missing route"
-            }
-          }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
-        );
-      }
       if (method === "GET" && requestURL.pathname === "/v1/agents/me/capabilities") {
         return new Response(JSON.stringify({ ok: true, result: {} }), {
           status: 200,
@@ -1590,7 +1526,7 @@ describe("MoltenHubClient", () => {
             result: {
               message_id: "message-top-level",
               delivery_id: "delivery-top-level",
-              openclaw_message: {
+              envelope: {
                 kind: "skill_result",
                 request_id: "req-top-level-pull",
                 output: {
@@ -1700,7 +1636,7 @@ describe("MoltenHubClient", () => {
           type: "delivery",
           result: {
             message: { message_id: "message-pre-response" },
-            openclaw_message: {
+            envelope: {
               kind: "agent_message"
             }
           }
@@ -1741,7 +1677,7 @@ describe("MoltenHubClient", () => {
           result: {
             message: { message_id: "message-pre-response" },
             delivery: { delivery_id: "delivery-pre-response" },
-            openclaw_message: {
+            envelope: {
               kind: "agent_message",
               request_id: "different",
               status: "ok",
@@ -1768,7 +1704,7 @@ describe("MoltenHubClient", () => {
           result: {
             message: { message_id: "message-final" },
             delivery: { delivery_id: "delivery-final" },
-            openclaw_message: {
+            envelope: {
               kind: "skill_result",
               request_id: "req-wait-for-response",
               status: "ok",
@@ -1930,7 +1866,7 @@ describe("MoltenHubClient", () => {
           type: "delivery",
           result: {
             message: { message_id: "message-no-delivery-id" },
-            openclaw_message: {
+            envelope: {
               kind: "skill_result",
               request_id: "req-no-delivery-id",
               output: "done"
@@ -1956,28 +1892,32 @@ describe("MoltenHubClient", () => {
     expect(result.deliveryId).toBe("");
   });
 
-  it("fails when plugin registration response is not ok", async () => {
+  it("skips retired plugin registration without making a request", async () => {
+    const fetchImpl = vi.fn(async () => new Response("forbidden", { status: 403 }));
     const client = new MoltenHubClient(testConfig(), {
-      fetchImpl: vi.fn(async () => new Response("forbidden", { status: 403 }))
+      fetchImpl
     });
 
-    await expect(client.registerPlugin()).rejects.toThrow("registration failed (403)");
+    await expect(client.registerPlugin()).resolves.toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it("fails with empty registration body when response text throws", async () => {
+  it("does not read retired registration responses", async () => {
+    const fetchImpl = vi.fn(async () => {
+      return {
+        ok: false,
+        status: 500,
+        text: async () => {
+          throw new Error("unavailable");
+        }
+      } as unknown as Response;
+    });
     const client = new MoltenHubClient(testConfig(), {
-      fetchImpl: vi.fn(async () => {
-        return {
-          ok: false,
-          status: 500,
-          text: async () => {
-            throw new Error("unavailable");
-          }
-        } as unknown as Response;
-      })
+      fetchImpl
     });
 
-    await expect(client.registerPlugin()).rejects.toThrow("registration failed (500)");
+    await expect(client.registerPlugin()).resolves.toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("validates required request fields", async () => {

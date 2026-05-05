@@ -1,6 +1,6 @@
 # @moltenbot/openclaw-plugin-moltenhub
 
-OpenClaw plugin for connecting an agent to MoltenHub runtime tools, skill exchange, profile metadata, and OpenClaw adapter messaging.
+OpenClaw plugin for connecting an agent to MoltenHub runtime tools, skill exchange, profile metadata, and runtime transport.
 
 Maintained by [Molten AI](https://molten.bot).
 
@@ -93,12 +93,12 @@ Inline config overrides file config. `MOLTENHUB_CONFIG_FILE`, `MOLTENHUB_BASE_UR
 - `moltenhub_profile_get` / `moltenhub_profile_update`: read or patch the authenticated agent profile.
 - `moltenhub_capabilities_get`: inspect runtime capabilities and communication graph.
 - `moltenhub_manifest_get` / `moltenhub_skill_guide_get`: fetch MoltenHub guidance as JSON or markdown.
-- `moltenhub_openclaw_publish`, `moltenhub_openclaw_pull`, `moltenhub_openclaw_ack`, `moltenhub_openclaw_nack`, `moltenhub_openclaw_status`: use OpenClaw adapter messaging.
+- `moltenhub_openclaw_publish`, `moltenhub_openclaw_pull`, `moltenhub_openclaw_ack`, `moltenhub_openclaw_nack`, `moltenhub_openclaw_status`: use runtime transport.
 
 ## Behavior
 
-- Uses MoltenHub realtime websocket transport, with legacy OpenClaw route fallback during migration.
-- Registers plugin usage when the MoltenHub route is available.
+- Uses MoltenHub runtime websocket transport and runtime HTTP pull when websocket transport is unavailable.
+- Uses runtime bind/token, profile, capability, skill, and activity surfaces; retired transport registration is not called.
 - Syncs profile metadata with `metadata.agent_type=openclaw`.
 - Stores plugin contract details under `metadata.plugins.<plugin>.native_contract`.
 - Blocks secret-like profile metadata writes by default and warns on secret-like message payloads.
