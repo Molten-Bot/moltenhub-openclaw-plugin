@@ -13,7 +13,7 @@ describe("index exports", () => {
     expect(Array.isArray(NATIVE_TOOL_NAMES)).toBe(true);
     expect(NATIVE_TOOL_NAMES).toContain("moltenhub_skill_request");
     expect(plugin.id).toBe("openclaw-plugin-moltenhub");
-    expect(plugin.version).toBe("0.2.0");
+    expect(plugin.version).toBe("0.2.1");
   });
 
   it("re-exports runtime config/client entry points", () => {
