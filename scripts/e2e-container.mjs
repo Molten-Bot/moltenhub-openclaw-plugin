@@ -75,8 +75,8 @@ async function createOrg(humanID, email, handle, displayName) {
 async function registerAgent(humanID, email, orgID, handle) {
   const tokenPayload = await httpJSON(
     "POST",
-    "/v1/agents/bind-tokens",
-    { org_id: orgID },
+    `/v1/orgs/${encodeURIComponent(orgID)}/agents/bind-tokens`,
+    {},
     humanHeaders(humanID, email)
   );
   const bindToken = tokenPayload?.bind_token;
