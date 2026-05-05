@@ -234,8 +234,6 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("registered", 200));
     harness.route("GET", "/v1/agents/me/capabilities", () =>
       jsonResponse({
         ok: true,
@@ -272,8 +270,6 @@ describe("MoltenHubClient native runtime", () => {
       },
       handshakePayload: { type: "not_ready" }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("forbidden", 500));
     harness.route("GET", "/v1/agents/me/capabilities", () =>
       jsonResponse(
         {
@@ -290,14 +286,15 @@ describe("MoltenHubClient native runtime", () => {
 
     expect(readiness.status).toBe("degraded");
     expect(readiness.canCommunicate).toBeUndefined();
-    expect(readiness.checks.pluginRegistration.ok).toBe(false);
+    expect(readiness.checks.pluginRegistration.ok).toBe(true);
+    expect(readiness.checks.pluginRegistration.skipped).toBe(true);
     expect(readiness.checks.profileSync.ok).toBe(false);
     expect(readiness.checks.session.ok).toBe(false);
     expect(readiness.checks.capabilities.ok).toBe(false);
     expect(readiness.checks.capabilities.error).toContain("caps down");
   });
 
-  it("treats missing register-plugin route as skipped readiness check", async () => {
+  it("skips retired plugin registration without calling the retired route", async () => {
     const harness = createHarness({
       config: {
         profile: {
@@ -307,18 +304,6 @@ describe("MoltenHubClient native runtime", () => {
       }
     });
 
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () =>
-      jsonResponse(
-        {
-          error: "route_not_found",
-          error_detail: {
-            code: "route_not_found",
-            message: "missing route"
-          }
-        },
-        404
-      )
-    );
     harness.route("GET", "/v1/agents/me/capabilities", () => jsonResponse({ ok: true, result: { can_communicate: true } }));
 
     const readiness = await harness.client.checkReadiness();
@@ -330,8 +315,8 @@ describe("MoltenHubClient native runtime", () => {
     expect(readiness.checks.pluginRegistration.skipped).toBe(true);
     expect(readiness.transport).toBe("websocket");
 
-    const registrationCalls = harness.calls.filter((call) => call.path === "/v1/openclaw/messages/register-plugin");
-    expect(registrationCalls).toHaveLength(1);
+    const registrationCalls = harness.calls.filter((call) => call.path.includes("openclaw"));
+    expect(registrationCalls).toHaveLength(0);
   });
 
   it("gets profile data through runtime JSON API", async () => {
@@ -343,8 +328,6 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("GET", "/v1/agents/me", () =>
       jsonResponse({
         ok: true,
@@ -397,8 +380,6 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("PATCH", "/v1/agents/me/metadata", () =>
       jsonResponse({
         ok: true,
@@ -430,8 +411,6 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("GET", "/v1/agents/me", () =>
       jsonResponse({
         ok: true,
@@ -456,8 +435,6 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("GET", "/v1/agents/me/capabilities", () => jsonResponse({ ok: true, result: { caps: ["skill"] } }));
     harness.route("GET", "/v1/agents/me/manifest", () => jsonResponse({ ok: true, result: { manifest: "json" } }));
     harness.route("GET", "/v1/agents/me/manifest?format=markdown", () => textResponse("# manifest"));
@@ -486,8 +463,6 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("GET", "/v1/agents/me/manifest?format=markdown", () =>
       jsonResponse(
         {
@@ -532,8 +507,6 @@ describe("MoltenHubClient native runtime", () => {
         message: {}
       })
     ).rejects.toThrow("message is required");
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("POST", "/v1/runtime/messages/publish", () =>
       jsonResponse({ ok: true, result: { message_id: "message-1" } })
     );
@@ -563,7 +536,9 @@ describe("MoltenHubClient native runtime", () => {
     expect((result.warnings as unknown[]).length).toBe(20);
     const publishBodies = harness.calls
       .filter((call) => call.path === "/v1/runtime/messages/publish")
-      .map((call) => call.body as { to_agent_uuid?: string; to_agent_uri?: string });
+      .map((call) => call.body as { message?: { protocol?: string }; to_agent_uuid?: string; to_agent_uri?: string });
+    const retiredProtocol = ["openclaw", "http", "v1"].join(".");
+    expect(publishBodies.every((body) => body.message?.protocol !== retiredProtocol)).toBe(true);
     expect(
       publishBodies.some(
         (body) => body.to_agent_uuid === undefined && body.to_agent_uri === "https://example.test/agents/peer-1"
@@ -585,8 +560,6 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("POST", "/v1/runtime/messages/publish", () =>
       jsonResponse({ ok: true, result: { message_id: "message-2" } })
     );
@@ -601,7 +574,7 @@ describe("MoltenHubClient native runtime", () => {
     expect(result).toEqual({ message_id: "message-2" });
   });
 
-  it("falls back to legacy OpenClaw publish when runtime route is unavailable", async () => {
+  it("does not call retired publish route when runtime route is unavailable", async () => {
     const harness = createHarness({
       config: {
         profile: {
@@ -610,28 +583,23 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("POST", "/v1/runtime/messages/publish", () =>
       jsonResponse({ error: "route_not_found", error_detail: { code: "route_not_found" } }, 404)
     );
-    harness.route("POST", "/v1/openclaw/messages/publish", () =>
-      jsonResponse({ ok: true, result: { message_id: "legacy-message-1" } })
-    );
+    await expect(
+      harness.client.openClawPublish({
+        toAgentUUID: "11111111-1111-1111-1111-111111111111",
+        message: {
+          kind: "ping"
+        }
+      })
+    ).rejects.toMatchObject({ status: 404, code: "route_not_found" });
 
-    const result = await harness.client.openClawPublish({
-      toAgentUUID: "11111111-1111-1111-1111-111111111111",
-      message: {
-        kind: "ping"
-      }
-    });
-
-    expect(result.message_id).toBe("legacy-message-1");
     expect(harness.calls.map((call) => `${call.method} ${call.path}`)).toContain("POST /v1/runtime/messages/publish");
-    expect(harness.calls.map((call) => `${call.method} ${call.path}`)).toContain("POST /v1/openclaw/messages/publish");
+    expect(harness.calls.some((call) => call.path.includes("openclaw"))).toBe(false);
   });
 
-  it("falls back to legacy OpenClaw routes for runtime unsupported status and error codes", async () => {
+  it("does not call retired routes for runtime unsupported status and error codes", async () => {
     const cases = [
       { status: 405, payload: { error: "method_not_allowed" } },
       { status: 501, payload: { error: "not_implemented" } },
@@ -650,28 +618,19 @@ describe("MoltenHubClient native runtime", () => {
           }
         }
       });
-
-      harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
       harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=5000", () =>
         jsonResponse(testCase.payload, testCase.status)
       );
-      harness.route("GET", "/v1/openclaw/messages/pull?timeout_ms=5000", () =>
-        jsonResponse({ ok: true, result: { delivery_id: `legacy-${testCase.status}` } })
-      );
+      await expect(harness.client.openClawPull({})).rejects.toMatchObject({ status: testCase.status });
 
-      const result = await harness.client.openClawPull({});
-
-      expect(result.delivery_id).toBe(`legacy-${testCase.status}`);
       expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
         "GET /v1/runtime/messages/pull?timeout_ms=5000"
       );
-      expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
-        "GET /v1/openclaw/messages/pull?timeout_ms=5000"
-      );
+      expect(harness.calls.some((call) => call.path.includes("openclaw"))).toBe(false);
     }
   });
 
-  it("does not use legacy OpenClaw fallback for runtime network errors", async () => {
+  it("does not use retired OpenClaw fallback for runtime network errors", async () => {
     const harness = createHarness({
       config: {
         profile: {
@@ -680,8 +639,6 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=5000", () => {
       throw new Error("network unavailable");
     });
@@ -690,12 +647,10 @@ describe("MoltenHubClient native runtime", () => {
     expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
       "GET /v1/runtime/messages/pull?timeout_ms=5000"
     );
-    expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).not.toContain(
-      "GET /v1/openclaw/messages/pull?timeout_ms=5000"
-    );
+    expect(harness.calls.some((call) => call.path.includes("openclaw"))).toBe(false);
   });
 
-  it("handles openclaw pull timeout normalization and validation", async () => {
+  it("handles runtime pull timeout normalization and validation", async () => {
     const harness = createHarness({
       config: {
         profile: {
@@ -704,8 +659,6 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=5000", () => textResponse("", 204));
     harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=7", () =>
       jsonResponse({ ok: true, result: { delivery_id: "delivery-7" } })
@@ -736,8 +689,6 @@ describe("MoltenHubClient native runtime", () => {
     await expect(harness.client.openClawAck({})).rejects.toThrow("deliveryId is required");
     await expect(harness.client.openClawNack({})).rejects.toThrow("deliveryId is required");
     await expect(harness.client.openClawStatus({})).rejects.toThrow("messageId is required");
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("POST", "/v1/runtime/messages/ack", () => jsonResponse({ ok: true, result: { status: "acked" } }));
     harness.route("POST", "/v1/runtime/messages/nack", () => jsonResponse({ ok: true, result: { status: "nacked" } }));
     harness.route("GET", "/v1/runtime/messages/message%2Fid", () =>
@@ -765,15 +716,13 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("GET", "/v1/agents/me/capabilities", () => jsonResponse({ ok: true, result: { can_communicate: false } }));
 
     await harness.client.getCapabilities();
     await harness.client.getCapabilities();
 
-    const registrationCalls = harness.calls.filter((call) => call.path.endsWith("/openclaw/messages/register-plugin"));
-    expect(registrationCalls).toHaveLength(2);
+    const registrationCalls = harness.calls.filter((call) => call.path.includes("openclaw"));
+    expect(registrationCalls).toHaveLength(0);
     expect(harness.wsFactory).toHaveBeenCalledTimes(1);
   });
 
@@ -792,8 +741,6 @@ describe("MoltenHubClient native runtime", () => {
     });
 
     const patchBodies: Array<Record<string, unknown>> = [];
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("PATCH", "/v1/agents/me/metadata", (_url, init) => {
       patchBodies.push(parseBody(init.body) as Record<string, unknown>);
       return jsonResponse({ ok: true, result: {} });
@@ -871,8 +818,6 @@ describe("MoltenHubClient native runtime", () => {
       }
     });
     let emptyKey = "";
-
-    emptyKeyHarness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     emptyKeyHarness.route("PATCH", "/v1/agents/me/metadata", (_url, init) => {
       const body = parseBody(init.body) as { metadata?: { plugins?: Record<string, unknown> } };
       emptyKey = Object.keys(body.metadata?.plugins ?? {})[0] ?? "";
@@ -893,8 +838,6 @@ describe("MoltenHubClient native runtime", () => {
       }
     });
     let invalidKey = "";
-
-    invalidKeyHarness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     invalidKeyHarness.route("PATCH", "/v1/agents/me/metadata", (_url, init) => {
       const body = parseBody(init.body) as { metadata?: { plugins?: Record<string, unknown> } };
       invalidKey = Object.keys(body.metadata?.plugins ?? {})[0] ?? "";
@@ -921,8 +864,6 @@ describe("MoltenHubClient native runtime", () => {
     });
 
     const patchBodies: Array<Record<string, unknown>> = [];
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("PATCH", "/v1/agents/me/metadata", (_url, init) => {
       patchBodies.push(parseBody(init.body) as Record<string, unknown>);
       if (patchBodies.length === 1) {
@@ -963,8 +904,6 @@ describe("MoltenHubClient native runtime", () => {
     });
 
     let patchCalls = 0;
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("PATCH", "/v1/agents/me/metadata", () => {
       patchCalls += 1;
       if (patchCalls === 1) {
@@ -992,8 +931,6 @@ describe("MoltenHubClient native runtime", () => {
         }
       }
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("PATCH", "/v1/agents/me/metadata", () =>
       jsonResponse(
         {
@@ -1022,8 +959,6 @@ describe("MoltenHubClient native runtime", () => {
       }
     });
 
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
-
     await expect(harness.client.getCapabilities()).rejects.toThrow("profile sync metadata contains secret-like values");
     expect(harness.wsFactory).not.toHaveBeenCalled();
     expect(harness.calls.some((call) => call.path === "/v1/agents/me/metadata")).toBe(false);
@@ -1048,8 +983,6 @@ describe("MoltenHubClient native runtime", () => {
     const pendingPatch = new Promise<Response>((resolve) => {
       resolvePatch = resolve;
     });
-
-    harness.route("POST", "/v1/openclaw/messages/register-plugin", () => textResponse("ok"));
     harness.route("PATCH", "/v1/agents/me/metadata", () => {
       patchCalls += 1;
       if (patchCalls === 1) {
@@ -1088,7 +1021,7 @@ describe("MoltenHubClient native runtime", () => {
           result: {
             message: { message_id: "message-req" },
             delivery: { delivery_id: "delivery-req" },
-            openclaw_message: {
+            envelope: {
               kind: "skill_result",
               request_id: "generated-request-id",
               status: "ok",
@@ -1166,6 +1099,13 @@ describe("MoltenHubClient native runtime", () => {
       .mockResolvedValueOnce(textResponse('{"error":{"code":"nested_fail","message":"nested message"}}', 500))
       .mockResolvedValueOnce(textResponse("", 500))
       .mockResolvedValueOnce(textResponse("{}", 500))
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        text: async () => {
+          throw new Error("body stream failed");
+        }
+      } as Response)
       .mockResolvedValueOnce(textResponse('{"ok":true}', 200));
 
     const client = new MoltenHubClient(baseConfig(), {
@@ -1198,6 +1138,7 @@ describe("MoltenHubClient native runtime", () => {
       code: "http_error",
       message: "{}"
     });
+    await expect(runtimeJSON(client, "GET", "/text-read-fails")).rejects.toThrow("request failed with status 503");
     await expect(runtimeJSON(client, "GET", "n")).resolves.toEqual({ ok: true });
   });
 
