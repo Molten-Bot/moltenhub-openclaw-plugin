@@ -724,7 +724,8 @@ describe("MoltenHubClient", () => {
     expect(sawUnexpectedNack).toBe(false);
   });
 
-  it("accepts websocket deliveries that encode skill_result under result.message", async () => {
+  it("ignores websocket delivery payloads outside result.envelope", async () => {
+    let sawMessageShapeNack = false;
     const socket = new FakeWebSocket((payload, current) => {
       if (payload.type === "publish") {
         current.emitMessage({
@@ -747,6 +748,24 @@ describe("MoltenHubClient", () => {
             delivery: { delivery_id: "delivery-message-shape" }
           }
         });
+        current.emitMessage({
+          type: "delivery",
+          result: {
+            message: {
+              message_id: "message-envelope-shape"
+            },
+            envelope: {
+              kind: "skill_result",
+              request_id: "req-message-shape",
+              status: "ok",
+              output: { ok: true }
+            },
+            delivery: { delivery_id: "delivery-envelope-shape" }
+          }
+        });
+      }
+      if (payload.type === "nack" && payload.delivery_id === "delivery-message-shape") {
+        sawMessageShapeNack = true;
       }
       if (payload.type === "ack") {
         current.emitMessage({
@@ -774,8 +793,9 @@ describe("MoltenHubClient", () => {
     });
 
     expect(result.output).toEqual({ ok: true });
-    expect(result.messageId).toBe("message-message-shape");
-    expect(result.deliveryId).toBe("delivery-message-shape");
+    expect(result.messageId).toBe("message-envelope-shape");
+    expect(result.deliveryId).toBe("delivery-envelope-shape");
+    expect(sawMessageShapeNack).toBe(true);
   });
 
   it("throws when websocket closes before result is delivered", async () => {

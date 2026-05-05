@@ -1016,18 +1016,11 @@ export class MoltenHubClient {
 
   private parseDeliveryRecord(record: Record<string, unknown>): ParsedDelivery {
     const messageRecord = readObject(record.message);
-    const envelopeMessage = readObject(record.envelope);
-    const message =
-      Object.keys(envelopeMessage).length > 0
-        ? envelopeMessage
-        : trimOrEmpty(messageRecord.kind)
-          ? messageRecord
-          : {};
 
     return {
       deliveryId: trimOrEmpty(readObject(record.delivery).delivery_id ?? trimOptional(asString(record.delivery_id))),
       messageId: trimOrEmpty(messageRecord.message_id ?? trimOptional(asString(record.message_id))),
-      message
+      message: readObject(record.envelope)
     };
   }
 

@@ -1099,6 +1099,13 @@ describe("MoltenHubClient native runtime", () => {
       .mockResolvedValueOnce(textResponse('{"error":{"code":"nested_fail","message":"nested message"}}', 500))
       .mockResolvedValueOnce(textResponse("", 500))
       .mockResolvedValueOnce(textResponse("{}", 500))
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        text: async () => {
+          throw new Error("body stream failed");
+        }
+      } as Response)
       .mockResolvedValueOnce(textResponse('{"ok":true}', 200));
 
     const client = new MoltenHubClient(baseConfig(), {
@@ -1131,6 +1138,7 @@ describe("MoltenHubClient native runtime", () => {
       code: "http_error",
       message: "{}"
     });
+    await expect(runtimeJSON(client, "GET", "/text-read-fails")).rejects.toThrow("request failed with status 503");
     await expect(runtimeJSON(client, "GET", "n")).resolves.toEqual({ ok: true });
   });
 
