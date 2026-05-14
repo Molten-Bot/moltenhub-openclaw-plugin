@@ -574,7 +574,7 @@ describe("MoltenHubClient native runtime", () => {
     expect(result).toEqual({ message_id: "message-2" });
   });
 
-  it("does not call retired publish route when runtime route is unavailable", async () => {
+  it("surfaces publish errors from the runtime message route", async () => {
     const harness = createHarness({
       config: {
         profile: {
@@ -596,10 +596,10 @@ describe("MoltenHubClient native runtime", () => {
     ).rejects.toMatchObject({ status: 404, code: "route_not_found" });
 
     expect(harness.calls.map((call) => `${call.method} ${call.path}`)).toContain("POST /v1/runtime/messages/publish");
-    expect(harness.calls.some((call) => call.path.includes("openclaw"))).toBe(false);
+    expect(harness.calls.some((call) => call.path.includes("openclaw/messages"))).toBe(false);
   });
 
-  it("does not call retired routes for runtime unsupported status and error codes", async () => {
+  it("surfaces runtime message route unsupported status and error codes", async () => {
     const cases = [
       { status: 405, payload: { error: "method_not_allowed" } },
       { status: 501, payload: { error: "not_implemented" } },
@@ -626,11 +626,11 @@ describe("MoltenHubClient native runtime", () => {
       expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
         "GET /v1/runtime/messages/pull?timeout_ms=5000"
       );
-      expect(harness.calls.some((call) => call.path.includes("openclaw"))).toBe(false);
+      expect(harness.calls.some((call) => call.path.includes("openclaw/messages"))).toBe(false);
     }
   });
 
-  it("does not use retired OpenClaw fallback for runtime network errors", async () => {
+  it("surfaces runtime message route network errors", async () => {
     const harness = createHarness({
       config: {
         profile: {
@@ -647,7 +647,7 @@ describe("MoltenHubClient native runtime", () => {
     expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
       "GET /v1/runtime/messages/pull?timeout_ms=5000"
     );
-    expect(harness.calls.some((call) => call.path.includes("openclaw"))).toBe(false);
+    expect(harness.calls.some((call) => call.path.includes("openclaw/messages"))).toBe(false);
   });
 
   it("handles runtime pull timeout normalization and validation", async () => {
@@ -661,22 +661,215 @@ describe("MoltenHubClient native runtime", () => {
     });
     harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=5000", () => textResponse("", 204));
     harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=7", () =>
-      jsonResponse({ ok: true, result: { delivery_id: "delivery-7" } })
+      jsonResponse({
+        ok: true,
+        result: {
+          delivery: {
+            delivery_id: "delivery-7",
+            message_id: "message-7"
+          },
+          message: {
+            payload: JSON.stringify({
+              protocol: "runtime.envelope.v1",
+              type: "skill_request",
+              request_id: "request-7",
+              payload: "hello"
+            })
+          }
+        }
+      })
+    );
+    harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=8", () =>
+      jsonResponse({
+        ok: true,
+        result: {
+          delivery: {
+            delivery_id: "delivery-8",
+            message_id: "message-8"
+          },
+          message: {
+            payload: {
+              protocol: "runtime.envelope.v1",
+              type: "skill_request",
+              request_id: "request-8",
+              payload: "object payload"
+            }
+          }
+        }
+      })
+    );
+    harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=9", () =>
+      jsonResponse({
+        ok: true,
+        result: {
+          delivery_id: "delivery-9",
+          message_id: "message-9",
+          envelope: {
+            protocol: "runtime.envelope.v1",
+            type: "skill_request",
+            request_id: "request-9",
+            payload: "existing envelope"
+          }
+        }
+      })
+    );
+    harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=10", () =>
+      jsonResponse({
+        ok: true,
+        result: {
+          delivery: {
+            delivery_id: "delivery-10",
+            message_id: "message-10"
+          },
+          message: {
+            from_agent_uuid: "11111111-1111-1111-1111-111111111111",
+            from_agent_uri: "https://hub.example/agents/source",
+            to_agent_uuid: "22222222-2222-2222-2222-222222222222",
+            to_agent_uri: "https://hub.example/agents/target",
+            payload: JSON.stringify({
+              protocol: "runtime.envelope.v1",
+              type: "skill_request",
+              request_id: "request-10",
+              payload: "local queue wrapper"
+            })
+          }
+        }
+      })
     );
 
     const defaultPull = await harness.client.openClawPull({});
     const nanPull = await harness.client.openClawPull({ timeoutMs: Number.NaN });
     const customPull = await harness.client.openClawPull({ timeoutMs: 7 });
+    const objectPayloadPull = await harness.client.openClawPull({ timeoutMs: 8 });
+    const existingEnvelopePull = await harness.client.openClawPull({ timeoutMs: 9 });
+    const localQueueWrapperPull = await harness.client.openClawPull({ timeoutMs: 10 });
 
     expect(defaultPull).toEqual({ status: "empty" });
     expect(nanPull).toEqual({ status: "empty" });
-    expect(customPull).toEqual({ delivery_id: "delivery-7" });
+    expect(customPull).toEqual({
+      delivery: {
+        delivery_id: "delivery-7",
+        message_id: "message-7"
+      },
+      message: {
+        payload: JSON.stringify({
+          protocol: "runtime.envelope.v1",
+          type: "skill_request",
+          request_id: "request-7",
+          payload: "hello"
+        })
+      },
+      envelope: {
+        protocol: "runtime.envelope.v1",
+        type: "skill_request",
+        request_id: "request-7",
+        payload: "hello"
+      }
+    });
+    expect(objectPayloadPull).toEqual({
+      delivery: {
+        delivery_id: "delivery-8",
+        message_id: "message-8"
+      },
+      message: {
+        payload: {
+          protocol: "runtime.envelope.v1",
+          type: "skill_request",
+          request_id: "request-8",
+          payload: "object payload"
+        }
+      },
+      envelope: {
+        protocol: "runtime.envelope.v1",
+        type: "skill_request",
+        request_id: "request-8",
+        payload: "object payload"
+      }
+    });
+    expect(existingEnvelopePull).toEqual({
+      delivery_id: "delivery-9",
+      message_id: "message-9",
+      envelope: {
+        protocol: "runtime.envelope.v1",
+        type: "skill_request",
+        request_id: "request-9",
+        payload: "existing envelope"
+      }
+    });
+    expect(localQueueWrapperPull).toEqual({
+      delivery: {
+        delivery_id: "delivery-10",
+        message_id: "message-10"
+      },
+      message: {
+        from_agent_uuid: "11111111-1111-1111-1111-111111111111",
+        from_agent_uri: "https://hub.example/agents/source",
+        to_agent_uuid: "22222222-2222-2222-2222-222222222222",
+        to_agent_uri: "https://hub.example/agents/target",
+        payload: JSON.stringify({
+          protocol: "runtime.envelope.v1",
+          type: "skill_request",
+          request_id: "request-10",
+          payload: "local queue wrapper"
+        })
+      },
+      envelope: {
+        protocol: "runtime.envelope.v1",
+        type: "skill_request",
+        request_id: "request-10",
+        payload: "local queue wrapper"
+      }
+    });
 
     await expect(harness.client.openClawPull({ timeoutMs: -1 })).rejects.toThrow("between 0 and 30000");
     await expect(harness.client.openClawPull({ timeoutMs: 30001 })).rejects.toThrow("between 0 and 30000");
   });
 
-  it("validates and executes ack, nack, and status routes", async () => {
+  it("normalizes constructor baseUrl before building runtime message routes", async () => {
+    const bareBaseHarness = createHarness({
+      config: {
+        baseUrl: "http://127.0.0.1:8080",
+        profile: {
+          enabled: false,
+          syncIntervalMs: 300_000
+        }
+      }
+    });
+    bareBaseHarness.route("GET", "/v1/runtime/messages/pull?timeout_ms=7", () =>
+      jsonResponse({ ok: true, result: { status: "empty" } })
+    );
+
+    const bareBasePull = await bareBaseHarness.client.openClawPull({ timeoutMs: 7 });
+
+    expect(bareBasePull).toEqual({ status: "empty" });
+    expect(bareBaseHarness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
+      "GET /v1/runtime/messages/pull?timeout_ms=7"
+    );
+    expect(bareBaseHarness.wsFactory.mock.calls.map((call) => call[0])).toEqual([
+      "ws://127.0.0.1:8080/v1/runtime/messages/ws?session_key=main"
+    ]);
+
+    const versionedBaseHarness = createHarness({
+      config: {
+        baseUrl: "http://127.0.0.1:8080/v1/",
+        profile: {
+          enabled: false,
+          syncIntervalMs: 300_000
+        }
+      }
+    });
+    versionedBaseHarness.route("POST", "/v1/runtime/messages/offline", () =>
+      jsonResponse({ ok: true, result: { status: "offline" } })
+    );
+
+    await expect(versionedBaseHarness.client.openClawOffline({})).resolves.toEqual({ status: "offline" });
+    expect(versionedBaseHarness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
+      "POST /v1/runtime/messages/offline"
+    );
+    expect(versionedBaseHarness.calls.some((call) => call.path.includes("/v1/v1/"))).toBe(false);
+  });
+
+  it("validates and executes ack, nack, offline, and status routes", async () => {
     const harness = createHarness({
       config: {
         profile: {
@@ -691,17 +884,28 @@ describe("MoltenHubClient native runtime", () => {
     await expect(harness.client.openClawStatus({})).rejects.toThrow("messageId is required");
     harness.route("POST", "/v1/runtime/messages/ack", () => jsonResponse({ ok: true, result: { status: "acked" } }));
     harness.route("POST", "/v1/runtime/messages/nack", () => jsonResponse({ ok: true, result: { status: "nacked" } }));
+    harness.route("POST", "/v1/runtime/messages/offline", () =>
+      jsonResponse({ ok: true, result: { status: "offline" } })
+    );
     harness.route("GET", "/v1/runtime/messages/message%2Fid", () =>
       jsonResponse({ ok: true, result: { status: "delivered" } })
     );
 
     const ack = await harness.client.openClawAck({ deliveryId: "delivery-a" });
     const nack = await harness.client.openClawNack({ deliveryId: "delivery-b" });
+    const offline = await harness.client.openClawOffline({ reason: "maintenance" });
+    const offlineWithoutReason = await harness.client.openClawOffline({});
     const status = await harness.client.openClawStatus({ messageId: "message/id" });
 
     expect(ack).toEqual({ status: "acked" });
     expect(nack).toEqual({ status: "nacked" });
+    expect(offline).toEqual({ status: "offline" });
+    expect(offlineWithoutReason).toEqual({ status: "offline" });
     expect(status).toEqual({ status: "delivered" });
+    expect(harness.calls.filter((call) => call.path === "/v1/runtime/messages/offline").map((call) => call.body)).toEqual([
+      { reason: "maintenance" },
+      undefined
+    ]);
   });
 
   it("reuses cached session health checks within configured ttl", async () => {
@@ -1257,6 +1461,17 @@ describe("MoltenHubClient native runtime", () => {
     expect(resolved.profile.enabled).toBe(false);
     expect(resolved.safety.blockMetadataSecrets).toBe(true);
     expect(resolved.safety.warnMessageSecrets).toBe(false);
+  });
+
+  it("resolveConfig appends v1 when base URL omits API version", () => {
+    const resolved = resolveConfig({
+      config: {
+        baseUrl: "https://hub.example.com/",
+        token: "token-inline"
+      }
+    });
+
+    expect(resolved.baseUrl).toBe("https://hub.example.com/v1");
   });
 
   it("resolveConfig ignores invalid boolean strings and falls back to defaults", () => {

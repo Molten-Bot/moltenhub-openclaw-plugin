@@ -115,6 +115,10 @@ export interface OpenClawDeliveryActionRequest {
   deliveryId: string;
 }
 
+export interface OpenClawOfflineRequest {
+  reason?: string;
+}
+
 export interface OpenClawMessageStatusRequest {
   messageId: string;
 }

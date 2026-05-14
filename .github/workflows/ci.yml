@@ -36,11 +36,6 @@ jobs:
       - name: Build MoltenHub E2E image
         run: |
           git clone --depth 1 https://github.com/Molten-Bot/moltenhub /tmp/moltenhub
-          if ! grep -R -q "register-plugin" /tmp/moltenhub/internal/api; then
-            echo "moltenhub main does not include OpenClaw plugin routes yet; using feature branch for plugin e2e"
-            git -C /tmp/moltenhub fetch --depth 1 origin codex/openclaw-realtime-plugin-registration
-            git -C /tmp/moltenhub checkout FETCH_HEAD
-          fi
           docker build -t moltenhub-openclaw-e2e:ci /tmp/moltenhub
 
       - name: Container E2E

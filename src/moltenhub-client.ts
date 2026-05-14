@@ -7,6 +7,7 @@ import type {
   AgentProfileUpdateRequest,
   MoltenHubPluginConfig,
   OpenClawDeliveryActionRequest,
+  OpenClawOfflineRequest,
   OpenClawMessageStatusRequest,
   OpenClawPublishRequest,
   OpenClawPullRequest,
@@ -52,7 +53,7 @@ interface WaitForResponseOptions {
 const defaultTimeoutMs = 20_000;
 const defaultPluginID = "openclaw-plugin-moltenhub";
 const defaultPluginPackage = "@moltenbot/openclaw-plugin-moltenhub";
-const defaultPluginVersion = "0.2.1";
+const defaultPluginVersion = "0.2.4";
 const defaultProfileSyncIntervalMs = 300_000;
 const defaultHealthcheckTtlMs = 30_000;
 const defaultPullTimeoutMs = 5_000;
@@ -85,6 +86,7 @@ export const NATIVE_TOOL_NAMES = [
   "moltenhub_openclaw_pull",
   "moltenhub_openclaw_ack",
   "moltenhub_openclaw_nack",
+  "moltenhub_openclaw_offline",
   "moltenhub_openclaw_status"
 ] as const;
 
@@ -670,7 +672,8 @@ export class MoltenHubClient {
 
     const timeoutMs = request.timeoutMs === undefined ? defaultPullTimeoutMs : normalizePullTimeout(request.timeoutMs);
     const query = `?timeout_ms=${encodeURIComponent(String(timeoutMs))}`;
-    return this.runtimeEnvelopeJSON("GET", `/pull${query}`, undefined, { allowNoContent: true });
+    const result = await this.runtimeEnvelopeJSON("GET", `/pull${query}`, undefined, { allowNoContent: true });
+    return this.normalizePullResult(result);
   }
 
   async openClawAck(request: OpenClawDeliveryActionRequest): Promise<Record<string, unknown>> {
@@ -695,6 +698,12 @@ export class MoltenHubClient {
     return this.runtimeEnvelopeJSON("POST", "/nack", {
       delivery_id: deliveryID
     });
+  }
+
+  async openClawOffline(request: OpenClawOfflineRequest = {}): Promise<Record<string, unknown>> {
+    await this.ensureReady();
+    const reason = trimOptional(request.reason);
+    return this.runtimeEnvelopeJSON("POST", "/offline", reason ? { reason } : undefined);
   }
 
   async openClawStatus(request: OpenClawMessageStatusRequest): Promise<Record<string, unknown>> {
@@ -755,7 +764,7 @@ export class MoltenHubClient {
 
   private isWebSocketRouteUnsupported(error: unknown): boolean {
     const message = String(error);
-    return /unexpected server response:\s*(404|405|426)\b/i.test(message);
+    return /unexpected server response:\s*(404|405|410|426)\b/i.test(message);
   }
 
   private async syncProfileIfDue(force: boolean): Promise<void> {
@@ -1016,11 +1025,28 @@ export class MoltenHubClient {
 
   private parseDeliveryRecord(record: Record<string, unknown>): ParsedDelivery {
     const messageRecord = readObject(record.message);
+    const deliveryRecord = readObject(record.delivery);
 
     return {
-      deliveryId: trimOrEmpty(readObject(record.delivery).delivery_id ?? trimOptional(asString(record.delivery_id))),
-      messageId: trimOrEmpty(messageRecord.message_id ?? trimOptional(asString(record.message_id))),
-      message: readObject(record.envelope)
+      deliveryId: trimOrEmpty(deliveryRecord.delivery_id ?? trimOptional(asString(record.delivery_id))),
+      messageId: trimOrEmpty(
+        deliveryRecord.message_id ?? messageRecord.message_id ?? trimOptional(asString(record.message_id))
+      ),
+      message: decodeDeliveryEnvelope(record)
+    };
+  }
+
+  private normalizePullResult(result: Record<string, unknown>): Record<string, unknown> {
+    if (trimOrEmpty(result.status) === "empty") {
+      return result;
+    }
+    const envelope = decodeDeliveryEnvelope(result);
+    if (Object.keys(envelope).length === 0 || readObject(result.envelope) === envelope) {
+      return result;
+    }
+    return {
+      ...result,
+      envelope
     };
   }
 
@@ -1028,7 +1054,7 @@ export class MoltenHubClient {
     skillContext: { requestId: string; skillName: string; warnings: SecretWarning[] },
     delivery: ParsedDelivery
   ): SkillExecutionResult | undefined {
-    const kind = trimOrEmpty(delivery.message.kind);
+    const kind = trimOrEmpty(delivery.message.kind) || trimOrEmpty(delivery.message.type);
     const resultRequestID = trimOrEmpty(delivery.message.request_id);
     if (kind !== "skill_result" || resultRequestID !== skillContext.requestId) {
       return undefined;
@@ -1174,6 +1200,7 @@ function normalizeRuntimeConfig(config: MoltenHubPluginConfig): MoltenHubPluginC
 
   return {
     ...config,
+    baseUrl: normalizeBaseURL(config.baseUrl),
     profile: {
       enabled: profile.enabled ?? true,
       handle: trimOptional(profile.handle),
@@ -1395,7 +1422,30 @@ function normalizeBaseURL(raw: string): string {
   if (!trimmed) {
     return "";
   }
-  return trimmed.replace(/\/+$/, "");
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+  if (/\/v\d+(?:\.\d+)?$/i.test(withoutTrailingSlash)) {
+    return withoutTrailingSlash;
+  }
+  return `${withoutTrailingSlash}/v1`;
+}
+
+function decodeDeliveryEnvelope(record: Record<string, unknown>): Record<string, unknown> {
+  const envelope = readObject(record.envelope);
+  if (Object.keys(envelope).length > 0) {
+    return envelope;
+  }
+
+  const message = readObject(record.message);
+  const payload = message.payload;
+  if (isRecord(payload)) {
+    return payload;
+  }
+  if (typeof payload !== "string") {
+    return {};
+  }
+
+  const decoded = tryParseJSON(payload);
+  return readObject(decoded);
 }
 
 function readConfigFile(configPath: string): Record<string, unknown> {
