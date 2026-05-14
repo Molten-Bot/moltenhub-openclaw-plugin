@@ -713,12 +713,36 @@ describe("MoltenHubClient native runtime", () => {
         }
       })
     );
+    harness.route("GET", "/v1/openclaw/messages/pull?timeout_ms=10", () =>
+      jsonResponse({
+        ok: true,
+        result: {
+          delivery: {
+            delivery_id: "delivery-10",
+            message_id: "message-10"
+          },
+          message: {
+            from_agent_uuid: "11111111-1111-1111-1111-111111111111",
+            from_agent_uri: "https://hub.example/agents/source",
+            to_agent_uuid: "22222222-2222-2222-2222-222222222222",
+            to_agent_uri: "https://hub.example/agents/target",
+            payload: JSON.stringify({
+              protocol: "runtime.envelope.v1",
+              type: "skill_request",
+              request_id: "request-10",
+              payload: "local queue wrapper"
+            })
+          }
+        }
+      })
+    );
 
     const defaultPull = await harness.client.openClawPull({});
     const nanPull = await harness.client.openClawPull({ timeoutMs: Number.NaN });
     const customPull = await harness.client.openClawPull({ timeoutMs: 7 });
     const objectPayloadPull = await harness.client.openClawPull({ timeoutMs: 8 });
     const existingEnvelopePull = await harness.client.openClawPull({ timeoutMs: 9 });
+    const localQueueWrapperPull = await harness.client.openClawPull({ timeoutMs: 10 });
 
     expect(defaultPull).toEqual({ status: "empty" });
     expect(nanPull).toEqual({ status: "empty" });
@@ -770,6 +794,30 @@ describe("MoltenHubClient native runtime", () => {
         type: "skill_request",
         request_id: "request-9",
         payload: "existing envelope"
+      }
+    });
+    expect(localQueueWrapperPull).toEqual({
+      delivery: {
+        delivery_id: "delivery-10",
+        message_id: "message-10"
+      },
+      message: {
+        from_agent_uuid: "11111111-1111-1111-1111-111111111111",
+        from_agent_uri: "https://hub.example/agents/source",
+        to_agent_uuid: "22222222-2222-2222-2222-222222222222",
+        to_agent_uri: "https://hub.example/agents/target",
+        payload: JSON.stringify({
+          protocol: "runtime.envelope.v1",
+          type: "skill_request",
+          request_id: "request-10",
+          payload: "local queue wrapper"
+        })
+      },
+      envelope: {
+        protocol: "runtime.envelope.v1",
+        type: "skill_request",
+        request_id: "request-10",
+        payload: "local queue wrapper"
       }
     });
 
