@@ -58,6 +58,7 @@ const defaultProfileSyncIntervalMs = 300_000;
 const defaultHealthcheckTtlMs = 30_000;
 const defaultPullTimeoutMs = 5_000;
 const defaultRuntimeMessagesPath = "/openclaw/messages";
+const compatibilityRuntimeMessagesPath = "/runtime/messages";
 
 const defaultSecretMarkers = [
   "api key",
@@ -193,6 +194,7 @@ class WebSocketSession {
 export class MoltenHubClient {
   private readonly config: MoltenHubPluginConfig;
   private readonly deps: MoltenHubClientDeps;
+  private activeMessagesPath: string;
   private lastSessionCheckAt = 0;
   private lastProfileSyncAt = 0;
   private handleFinalizeAttempted = false;
@@ -201,6 +203,7 @@ export class MoltenHubClient {
 
   constructor(config: MoltenHubPluginConfig, deps?: Partial<MoltenHubClientDeps>) {
     this.config = normalizeRuntimeConfig(config);
+    this.activeMessagesPath = this.config.transport.messagesPath;
     this.deps = {
       ...defaultDeps,
       ...deps
@@ -939,8 +942,16 @@ export class MoltenHubClient {
 
   private async openSession(sessionKey: string, timeoutMs: number): Promise<WebSocketSession> {
     const wsBase = this.config.baseUrl.replace(/^http/i, "ws");
-    const wsURL = `${wsBase}${this.config.transport.messagesPath}/ws?session_key=${encodeURIComponent(sessionKey)}`;
-    return this.openSessionAtURL(wsURL, timeoutMs);
+    const query = `?session_key=${encodeURIComponent(sessionKey)}`;
+    try {
+      return await this.openSessionAtURL(`${wsBase}${this.activeMessagesPath}/ws${query}`, timeoutMs);
+    } catch (error) {
+      if (!this.shouldFallbackMessagesPath(error)) {
+        throw error;
+      }
+      this.activeMessagesPath = compatibilityRuntimeMessagesPath;
+      return this.openSessionAtURL(`${wsBase}${this.activeMessagesPath}/ws${query}`, timeoutMs);
+    }
   }
 
   private async openSessionAtURL(wsURL: string, timeoutMs: number): Promise<WebSocketSession> {
@@ -1162,7 +1173,25 @@ export class MoltenHubClient {
     options?: RuntimeRequestOptions
   ): Promise<Record<string, unknown>> {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-    return this.runtimeJSON(method, `${this.config.transport.messagesPath}${normalizedPath}`, body, options);
+    try {
+      return await this.runtimeJSON(method, `${this.activeMessagesPath}${normalizedPath}`, body, options);
+    } catch (error) {
+      if (!this.shouldFallbackMessagesPath(error)) {
+        throw error;
+      }
+      this.activeMessagesPath = compatibilityRuntimeMessagesPath;
+      return this.runtimeJSON(method, `${this.activeMessagesPath}${normalizedPath}`, body, options);
+    }
+  }
+
+  private shouldFallbackMessagesPath(error: unknown): boolean {
+    if (this.activeMessagesPath !== defaultRuntimeMessagesPath) {
+      return false;
+    }
+    if (error instanceof MoltenHubAPIError) {
+      return error.status === 410 && error.code === "endpoint_retired";
+    }
+    return /unexpected server response:\s*410\b/i.test(String(error));
   }
 
   private async runtimeText(path: string): Promise<string> {

@@ -897,6 +897,114 @@ describe("MoltenHubClient native runtime", () => {
     expect(harness.wsFactory.mock.calls.map((call) => call[0])).toEqual([
       "ws://127.0.0.1:8080/v1/runtime/messages/ws?session_key=main"
     ]);
+
+    harness.route("GET", "/v1/runtime/messages/pull?timeout_ms=8", () =>
+      jsonResponse(
+        {
+          error: {
+            code: "endpoint_retired",
+            message: "custom route retired"
+          }
+        },
+        410
+      )
+    );
+    await expect(harness.client.openClawPull({ timeoutMs: 8 })).rejects.toMatchObject({
+      status: 410,
+      code: "endpoint_retired"
+    });
+    expect(harness.calls.some((call) => call.path === "/v1/openclaw/messages/pull")).toBe(false);
+  });
+
+  it("falls back to the runtime compatibility path when the default openclaw route is retired", async () => {
+    const harness = createHarness({
+      config: {
+        profile: {
+          enabled: false,
+          syncIntervalMs: 300_000
+        }
+      }
+    });
+    harness.route("POST", "/v1/openclaw/messages/publish", () =>
+      jsonResponse(
+        {
+          error: {
+            code: "endpoint_retired",
+            message: "OpenClaw compatibility endpoints are retired"
+          }
+        },
+        410
+      )
+    );
+    harness.route("POST", "/v1/runtime/messages/publish", () =>
+      jsonResponse({ ok: true, result: { message_id: "message-runtime" } })
+    );
+    harness.route("POST", "/v1/runtime/messages/ack", () =>
+      jsonResponse({ ok: true, result: { status: "acked" } })
+    );
+
+    const publish = await harness.client.openClawPublish({
+      toAgentUUID: "11111111-1111-1111-1111-111111111111",
+      message: {
+        kind: "node_event"
+      }
+    });
+    const ack = await harness.client.openClawAck({ deliveryId: "delivery-runtime" });
+
+    expect(publish).toEqual({ message_id: "message-runtime" });
+    expect(ack).toEqual({ status: "acked" });
+    expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
+      "POST /v1/openclaw/messages/publish"
+    );
+    expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
+      "POST /v1/runtime/messages/publish"
+    );
+    expect(harness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
+      "POST /v1/runtime/messages/ack"
+    );
+    expect(harness.calls.some((call) => call.path === "/v1/openclaw/messages/ack")).toBe(false);
+  });
+
+  it("falls back to the runtime websocket path when the default openclaw websocket route is retired", async () => {
+    let attempt = 0;
+    const wsFactory = vi.fn(() => {
+      attempt += 1;
+      const socket = new FakeWebSocket();
+      queueMicrotask(() => {
+        if (attempt === 1) {
+          socket.emitError("Unexpected server response: 410");
+          return;
+        }
+        socket.emitOpen();
+        setTimeout(() => {
+          socket.emitMessage({ type: "session_ready", session_key: "main" });
+        }, 0);
+      });
+      return socket;
+    });
+
+    const client = new MoltenHubClient(
+      baseConfig({
+        profile: {
+          enabled: false,
+          syncIntervalMs: 300_000
+        }
+      }),
+      {
+        fetchImpl: vi.fn(async () => jsonResponse({ ok: true, result: {} })),
+        wsFactory
+      }
+    );
+
+    await expect(client.checkSession()).resolves.toEqual({
+      status: "ok",
+      sessionKey: "main",
+      transport: "websocket"
+    });
+    expect(wsFactory.mock.calls.map((call) => call[0])).toEqual([
+      "ws://127.0.0.1:8080/v1/openclaw/messages/ws?session_key=main",
+      "ws://127.0.0.1:8080/v1/runtime/messages/ws?session_key=main"
+    ]);
   });
 
   it("validates and executes ack, nack, offline, and status routes", async () => {

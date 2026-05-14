@@ -1232,7 +1232,7 @@ describe("MoltenHubClient", () => {
     const wsFactory = vi.fn(() => {
       const socket = new FakeWebSocket();
       queueMicrotask(() => {
-        socket.emitError("Unexpected server response: 410");
+        socket.emitError("Unexpected server response: 404");
       });
       return socket;
     });
