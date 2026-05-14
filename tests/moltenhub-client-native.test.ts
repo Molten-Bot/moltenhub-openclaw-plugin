@@ -679,10 +679,46 @@ describe("MoltenHubClient native runtime", () => {
         }
       })
     );
+    harness.route("GET", "/v1/openclaw/messages/pull?timeout_ms=8", () =>
+      jsonResponse({
+        ok: true,
+        result: {
+          delivery: {
+            delivery_id: "delivery-8",
+            message_id: "message-8"
+          },
+          message: {
+            payload: {
+              protocol: "runtime.envelope.v1",
+              type: "skill_request",
+              request_id: "request-8",
+              payload: "object payload"
+            }
+          }
+        }
+      })
+    );
+    harness.route("GET", "/v1/openclaw/messages/pull?timeout_ms=9", () =>
+      jsonResponse({
+        ok: true,
+        result: {
+          delivery_id: "delivery-9",
+          message_id: "message-9",
+          envelope: {
+            protocol: "runtime.envelope.v1",
+            type: "skill_request",
+            request_id: "request-9",
+            payload: "existing envelope"
+          }
+        }
+      })
+    );
 
     const defaultPull = await harness.client.openClawPull({});
     const nanPull = await harness.client.openClawPull({ timeoutMs: Number.NaN });
     const customPull = await harness.client.openClawPull({ timeoutMs: 7 });
+    const objectPayloadPull = await harness.client.openClawPull({ timeoutMs: 8 });
+    const existingEnvelopePull = await harness.client.openClawPull({ timeoutMs: 9 });
 
     expect(defaultPull).toEqual({ status: "empty" });
     expect(nanPull).toEqual({ status: "empty" });
@@ -704,6 +740,36 @@ describe("MoltenHubClient native runtime", () => {
         type: "skill_request",
         request_id: "request-7",
         payload: "hello"
+      }
+    });
+    expect(objectPayloadPull).toEqual({
+      delivery: {
+        delivery_id: "delivery-8",
+        message_id: "message-8"
+      },
+      message: {
+        payload: {
+          protocol: "runtime.envelope.v1",
+          type: "skill_request",
+          request_id: "request-8",
+          payload: "object payload"
+        }
+      },
+      envelope: {
+        protocol: "runtime.envelope.v1",
+        type: "skill_request",
+        request_id: "request-8",
+        payload: "object payload"
+      }
+    });
+    expect(existingEnvelopePull).toEqual({
+      delivery_id: "delivery-9",
+      message_id: "message-9",
+      envelope: {
+        protocol: "runtime.envelope.v1",
+        type: "skill_request",
+        request_id: "request-9",
+        payload: "existing envelope"
       }
     });
 
@@ -736,12 +802,18 @@ describe("MoltenHubClient native runtime", () => {
     const ack = await harness.client.openClawAck({ deliveryId: "delivery-a" });
     const nack = await harness.client.openClawNack({ deliveryId: "delivery-b" });
     const offline = await harness.client.openClawOffline({ reason: "maintenance" });
+    const offlineWithoutReason = await harness.client.openClawOffline({});
     const status = await harness.client.openClawStatus({ messageId: "message/id" });
 
     expect(ack).toEqual({ status: "acked" });
     expect(nack).toEqual({ status: "nacked" });
     expect(offline).toEqual({ status: "offline" });
+    expect(offlineWithoutReason).toEqual({ status: "offline" });
     expect(status).toEqual({ status: "delivered" });
+    expect(harness.calls.filter((call) => call.path === "/v1/openclaw/messages/offline").map((call) => call.body)).toEqual([
+      { reason: "maintenance" },
+      undefined
+    ]);
   });
 
   it("reuses cached session health checks within configured ttl", async () => {
