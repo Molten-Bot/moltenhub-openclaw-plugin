@@ -10,6 +10,7 @@ import type {
   OpenClawPublishRequest,
   OpenClawPullRequest,
   OpenClawDeliveryActionRequest,
+  OpenClawOfflineRequest,
   OpenClawMessageStatusRequest,
   ReadinessCheckResult,
   SessionStatusResult
@@ -28,6 +29,7 @@ interface MoltenHubClientContract {
   openClawPull: (request?: OpenClawPullRequest) => Promise<Record<string, unknown>>;
   openClawAck: (request: OpenClawDeliveryActionRequest) => Promise<Record<string, unknown>>;
   openClawNack: (request: OpenClawDeliveryActionRequest) => Promise<Record<string, unknown>>;
+  openClawOffline: (request?: OpenClawOfflineRequest) => Promise<Record<string, unknown>>;
   openClawStatus: (request: OpenClawMessageStatusRequest) => Promise<Record<string, unknown>>;
 }
 
@@ -192,6 +194,16 @@ const openClawNackInputSchema: Record<string, unknown> = {
   }
 };
 
+const openClawOfflineInputSchema: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    reason: {
+      type: "string",
+      description: "Optional offline reason"
+    }
+  }
+};
+
 const openClawStatusInputSchema: Record<string, unknown> = {
   type: "object",
   required: ["messageId"],
@@ -264,6 +276,12 @@ function parseOpenClawPullRequest(input: Record<string, unknown>): OpenClawPullR
 function parseOpenClawDeliveryActionRequest(input: Record<string, unknown>): OpenClawDeliveryActionRequest {
   return {
     deliveryId: asTrimmedString(input.deliveryId) ?? ""
+  };
+}
+
+function parseOpenClawOfflineRequest(input: Record<string, unknown>): OpenClawOfflineRequest {
+  return {
+    reason: asTrimmedString(input.reason)
   };
 }
 
@@ -491,6 +509,19 @@ function openClawNackTool(client: () => MoltenHubClientContract): OpenClawToolDe
   };
 }
 
+function openClawOfflineTool(client: () => MoltenHubClientContract): OpenClawToolDefinition {
+  return {
+    name: "moltenhub_openclaw_offline",
+    description: "Mark this agent offline in the MoltenHub OpenClaw message queue.",
+    parameters: openClawOfflineInputSchema,
+    execute: async (_callID, params) => {
+      const request = parseOpenClawOfflineRequest(asRecord(params));
+      const result = await client().openClawOffline(request);
+      return toToolResult(result);
+    }
+  };
+}
+
 function openClawStatusTool(client: () => MoltenHubClientContract): OpenClawToolDefinition {
   return {
     name: "moltenhub_openclaw_status",
@@ -520,7 +551,7 @@ export function createMoltenHubOpenClawPlugin(deps?: PluginFactoryDeps): OpenCla
     name: "MoltenHub Realtime",
     description:
       "Molten AI maintained plugin for native MoltenHub interaction: realtime skill exchange, runtime transport, profile/capability discovery, and safety guardrails.",
-    version: "0.2.1",
+    version: "0.2.2",
     register: (api: OpenClawPluginAPI) => {
       const client = buildClient(api, factory);
 
@@ -536,6 +567,7 @@ export function createMoltenHubOpenClawPlugin(deps?: PluginFactoryDeps): OpenCla
       api.registerTool(openClawPullTool(() => client));
       api.registerTool(openClawAckTool(() => client));
       api.registerTool(openClawNackTool(() => client));
+      api.registerTool(openClawOfflineTool(() => client));
       api.registerTool(openClawStatusTool(() => client));
     }
   };

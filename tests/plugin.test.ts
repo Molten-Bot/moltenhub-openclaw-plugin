@@ -53,6 +53,7 @@ function setupPluginWithMockClient() {
   const openClawPull = vi.fn(async () => ({ delivery: { delivery_id: "delivery-9" } }));
   const openClawAck = vi.fn(async () => ({ status: "acked" }));
   const openClawNack = vi.fn(async () => ({ status: "nacked" }));
+  const openClawOffline = vi.fn(async () => ({ status: "offline" }));
   const openClawStatus = vi.fn(async () => ({ message_id: "message-9" }));
 
   const plugin = createMoltenHubOpenClawPlugin({
@@ -69,6 +70,7 @@ function setupPluginWithMockClient() {
       openClawPull,
       openClawAck,
       openClawNack,
+      openClawOffline,
       openClawStatus
     })
   });
@@ -88,6 +90,7 @@ function setupPluginWithMockClient() {
     openClawPull,
     openClawAck,
     openClawNack,
+    openClawOffline,
     openClawStatus,
     api: {
       pluginConfig: {
@@ -321,7 +324,7 @@ describe("createMoltenHubOpenClawPlugin", () => {
     expect(ctx.getSkillGuide).toHaveBeenNthCalledWith(2, "json");
   });
 
-  it("normalizes openclaw publish, pull, ack, nack, and status requests", async () => {
+  it("normalizes openclaw publish, pull, ack, nack, offline, and status requests", async () => {
     const ctx = setupPluginWithMockClient();
     ctx.plugin.register(ctx.api);
 
@@ -340,6 +343,9 @@ describe("createMoltenHubOpenClawPlugin", () => {
     await ctx.tools.find((tool) => tool.name === "moltenhub_openclaw_nack")!.execute("call-15", {
       deliveryId: " delivery-2 "
     });
+    await ctx.tools.find((tool) => tool.name === "moltenhub_openclaw_offline")!.execute("call-15b", {
+      reason: " maintenance "
+    });
     await ctx.tools.find((tool) => tool.name === "moltenhub_openclaw_status")!.execute("call-16", {
       messageId: " message-1 "
     });
@@ -353,6 +359,7 @@ describe("createMoltenHubOpenClawPlugin", () => {
     expect(ctx.openClawPull).toHaveBeenCalledWith({ timeoutMs: 1000 });
     expect(ctx.openClawAck).toHaveBeenCalledWith({ deliveryId: "delivery-1" });
     expect(ctx.openClawNack).toHaveBeenCalledWith({ deliveryId: "delivery-2" });
+    expect(ctx.openClawOffline).toHaveBeenCalledWith({ reason: "maintenance" });
     expect(ctx.openClawStatus).toHaveBeenCalledWith({ messageId: "message-1" });
   });
 
@@ -460,6 +467,7 @@ describe("createMoltenHubOpenClawPlugin", () => {
         openClawPull: vi.fn(async () => ({})),
         openClawAck: vi.fn(async () => ({})),
         openClawNack: vi.fn(async () => ({})),
+        openClawOffline: vi.fn(async () => ({})),
         openClawStatus: vi.fn(async () => ({}))
       })
     });
