@@ -214,13 +214,13 @@ async function waitForHealth() {
   throw new Error(`moltenhub container did not become healthy at ${baseURL}/health`);
 }
 
-async function ensureRuntimeRealtimeRoutes() {
-  const wsResponse = await fetch(`${baseURL}/v1/runtime/messages/ws`);
+async function ensureOpenClawMessageRoutes() {
+  const wsResponse = await fetch(`${baseURL}/v1/openclaw/messages/ws`);
   if (wsResponse.status !== 404) {
     return;
   }
   throw new Error(
-    `moltenhub image "${moltenhubImage}" does not expose /v1/runtime/messages/ws; set MOLTENHUB_IMAGE to a build containing realtime runtime routes`
+    `moltenhub image "${moltenhubImage}" does not expose /v1/openclaw/messages/ws; set MOLTENHUB_IMAGE to a build containing OpenClaw message routes`
   );
 }
 
@@ -246,7 +246,7 @@ async function main() {
   ]);
 
   await waitForHealth();
-  await ensureRuntimeRealtimeRoutes();
+  await ensureOpenClawMessageRoutes();
 
   const alice = { id: "alice", email: "alice@e2e.test" };
   const bob = { id: "bob", email: "bob@e2e.test" };

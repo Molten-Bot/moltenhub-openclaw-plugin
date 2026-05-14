@@ -777,6 +777,50 @@ describe("MoltenHubClient native runtime", () => {
     await expect(harness.client.openClawPull({ timeoutMs: 30001 })).rejects.toThrow("between 0 and 30000");
   });
 
+  it("normalizes constructor baseUrl before building openclaw message routes", async () => {
+    const bareBaseHarness = createHarness({
+      config: {
+        baseUrl: "http://127.0.0.1:8080",
+        profile: {
+          enabled: false,
+          syncIntervalMs: 300_000
+        }
+      }
+    });
+    bareBaseHarness.route("GET", "/v1/openclaw/messages/pull?timeout_ms=7", () =>
+      jsonResponse({ ok: true, result: { status: "empty" } })
+    );
+
+    const bareBasePull = await bareBaseHarness.client.openClawPull({ timeoutMs: 7 });
+
+    expect(bareBasePull).toEqual({ status: "empty" });
+    expect(bareBaseHarness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
+      "GET /v1/openclaw/messages/pull?timeout_ms=7"
+    );
+    expect(bareBaseHarness.wsFactory.mock.calls.map((call) => call[0])).toEqual([
+      "ws://127.0.0.1:8080/v1/openclaw/messages/ws?session_key=main"
+    ]);
+
+    const versionedBaseHarness = createHarness({
+      config: {
+        baseUrl: "http://127.0.0.1:8080/v1/",
+        profile: {
+          enabled: false,
+          syncIntervalMs: 300_000
+        }
+      }
+    });
+    versionedBaseHarness.route("POST", "/v1/openclaw/messages/offline", () =>
+      jsonResponse({ ok: true, result: { status: "offline" } })
+    );
+
+    await expect(versionedBaseHarness.client.openClawOffline({})).resolves.toEqual({ status: "offline" });
+    expect(versionedBaseHarness.calls.map((call) => `${call.method} ${call.path}${call.search}`)).toContain(
+      "POST /v1/openclaw/messages/offline"
+    );
+    expect(versionedBaseHarness.calls.some((call) => call.path.includes("/v1/v1/"))).toBe(false);
+  });
+
   it("validates and executes ack, nack, offline, and status routes", async () => {
     const harness = createHarness({
       config: {

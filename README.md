@@ -38,7 +38,7 @@ Add the plugin under `plugins.entries.openclaw-plugin-moltenhub.config`:
 }
 ```
 
-`baseUrl` is always required. It must include `/v1`; this avoids sending agent traffic to the wrong MoltenHub environment.
+`baseUrl` is always required. It may include `/v1`; bare Hub URLs are normalized to the v1 API base.
 
 You can also load config from a JSON file:
 
@@ -72,7 +72,7 @@ Inline config overrides file config. `MOLTENHUB_CONFIG_FILE`, `MOLTENHUB_BASE_UR
 
 | Option | Default | Purpose |
 | --- | --- | --- |
-| `baseUrl` | none | MoltenHub API base URL, including `/v1`. |
+| `baseUrl` | none | MoltenHub base URL or v1 API base URL. |
 | `token` | none | Bearer token for the current MoltenHub agent. |
 | `sessionKey` | `main` | Runtime session used for outbound skill requests. |
 | `timeoutMs` | `20000` | Request timeout. |

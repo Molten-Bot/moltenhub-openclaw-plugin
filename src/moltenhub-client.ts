@@ -53,7 +53,7 @@ interface WaitForResponseOptions {
 const defaultTimeoutMs = 20_000;
 const defaultPluginID = "openclaw-plugin-moltenhub";
 const defaultPluginPackage = "@moltenbot/openclaw-plugin-moltenhub";
-const defaultPluginVersion = "0.2.2";
+const defaultPluginVersion = "0.2.3";
 const defaultProfileSyncIntervalMs = 300_000;
 const defaultHealthcheckTtlMs = 30_000;
 const defaultPullTimeoutMs = 5_000;
@@ -764,7 +764,7 @@ export class MoltenHubClient {
 
   private isWebSocketRouteUnsupported(error: unknown): boolean {
     const message = String(error);
-    return /unexpected server response:\s*(404|405|426)\b/i.test(message);
+    return /unexpected server response:\s*(404|405|410|426)\b/i.test(message);
   }
 
   private async syncProfileIfDue(force: boolean): Promise<void> {
@@ -1200,6 +1200,7 @@ function normalizeRuntimeConfig(config: MoltenHubPluginConfig): MoltenHubPluginC
 
   return {
     ...config,
+    baseUrl: normalizeBaseURL(config.baseUrl),
     profile: {
       enabled: profile.enabled ?? true,
       handle: trimOptional(profile.handle),
