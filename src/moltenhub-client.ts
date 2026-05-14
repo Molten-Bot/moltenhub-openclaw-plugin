@@ -53,11 +53,11 @@ interface WaitForResponseOptions {
 const defaultTimeoutMs = 20_000;
 const defaultPluginID = "openclaw-plugin-moltenhub";
 const defaultPluginPackage = "@moltenbot/openclaw-plugin-moltenhub";
-const defaultPluginVersion = "0.2.4";
+const defaultPluginVersion = "0.2.5";
 const defaultProfileSyncIntervalMs = 300_000;
 const defaultHealthcheckTtlMs = 30_000;
 const defaultPullTimeoutMs = 5_000;
-const runtimeMessagesPath = "/runtime/messages";
+const defaultRuntimeMessagesPath = "/openclaw/messages";
 
 const defaultSecretMarkers = [
   "api key",
@@ -939,7 +939,7 @@ export class MoltenHubClient {
 
   private async openSession(sessionKey: string, timeoutMs: number): Promise<WebSocketSession> {
     const wsBase = this.config.baseUrl.replace(/^http/i, "ws");
-    const wsURL = `${wsBase}${runtimeMessagesPath}/ws?session_key=${encodeURIComponent(sessionKey)}`;
+    const wsURL = `${wsBase}${this.config.transport.messagesPath}/ws?session_key=${encodeURIComponent(sessionKey)}`;
     return this.openSessionAtURL(wsURL, timeoutMs);
   }
 
@@ -1162,7 +1162,7 @@ export class MoltenHubClient {
     options?: RuntimeRequestOptions
   ): Promise<Record<string, unknown>> {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-    return this.runtimeJSON(method, `${runtimeMessagesPath}${normalizedPath}`, body, options);
+    return this.runtimeJSON(method, `${this.config.transport.messagesPath}${normalizedPath}`, body, options);
   }
 
   private async runtimeText(path: string): Promise<string> {
@@ -1191,11 +1191,15 @@ function normalizeRuntimeConfig(config: MoltenHubPluginConfig): MoltenHubPluginC
   const unsafe = config as unknown as {
     profile?: Partial<MoltenHubPluginConfig["profile"]>;
     connection?: Partial<MoltenHubPluginConfig["connection"]>;
+    transport?: Partial<MoltenHubPluginConfig["transport"]>;
+    messagesPath?: unknown;
+    runtimeMessagesPath?: unknown;
     safety?: Partial<MoltenHubPluginConfig["safety"]>;
   };
 
   const profile = unsafe.profile ?? {};
   const connection = unsafe.connection ?? {};
+  const transport = unsafe.transport ?? {};
   const safety = unsafe.safety ?? {};
 
   return {
@@ -1219,6 +1223,9 @@ function normalizeRuntimeConfig(config: MoltenHubPluginConfig): MoltenHubPluginC
         3_600_000,
         defaultHealthcheckTtlMs
       )
+    },
+    transport: {
+      messagesPath: normalizeMessagesPath(transport.messagesPath || unsafe.messagesPath || unsafe.runtimeMessagesPath)
     },
     safety: {
       blockMetadataSecrets: safety.blockMetadataSecrets ?? true,
@@ -1303,6 +1310,20 @@ export function resolveConfig(context: ResolveConfigInput): MoltenHubPluginConfi
     defaultHealthcheckTtlMs
   );
 
+  const fileTransport = readObject(fileConfig.transport);
+  const inlineTransport = readObject(config.transport);
+  const messagesPath = normalizeMessagesPath(
+    asString(inlineTransport.messagesPath) ||
+      asString(config.messagesPath) ||
+      asString(config.runtimeMessagesPath) ||
+      asString(fileTransport.messagesPath) ||
+      asString(fileConfig.messagesPath) ||
+      asString(fileConfig.runtimeMessagesPath) ||
+      env.MOLTENHUB_OPENCLAW_MESSAGES_PATH ||
+      env.MOLTENHUB_RUNTIME_MESSAGES_PATH ||
+      defaultRuntimeMessagesPath
+  );
+
   const fileSafety = readObject(fileConfig.safety);
   const inlineSafety = readObject(config.safety);
   const blockMetadataSecrets =
@@ -1349,6 +1370,9 @@ export function resolveConfig(context: ResolveConfigInput): MoltenHubPluginConfi
     },
     connection: {
       healthcheckTtlMs
+    },
+    transport: {
+      messagesPath
     },
     safety: {
       blockMetadataSecrets,
@@ -1427,6 +1451,15 @@ function normalizeBaseURL(raw: string): string {
     return withoutTrailingSlash;
   }
   return `${withoutTrailingSlash}/v1`;
+}
+
+function normalizeMessagesPath(raw: unknown): string {
+  const trimmed = trimOrEmpty(raw);
+  if (!trimmed) {
+    return defaultRuntimeMessagesPath;
+  }
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+  return withoutTrailingSlash.startsWith("/") ? withoutTrailingSlash : `/${withoutTrailingSlash}`;
 }
 
 function decodeDeliveryEnvelope(record: Record<string, unknown>): Record<string, unknown> {

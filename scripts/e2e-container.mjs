@@ -215,12 +215,12 @@ async function waitForHealth() {
 }
 
 async function ensureRuntimeRealtimeRoutes() {
-  const wsResponse = await fetch(`${baseURL}/v1/runtime/messages/ws`);
+  const wsResponse = await fetch(`${baseURL}/v1/openclaw/messages/ws`);
   if (wsResponse.status !== 404) {
     return;
   }
   throw new Error(
-    `moltenhub image "${moltenhubImage}" does not expose /v1/runtime/messages/ws; set MOLTENHUB_IMAGE to a build containing realtime runtime routes`
+    `moltenhub image "${moltenhubImage}" does not expose /v1/openclaw/messages/ws; set MOLTENHUB_IMAGE to a build containing realtime runtime routes`
   );
 }
 

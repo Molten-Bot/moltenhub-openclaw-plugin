@@ -8,6 +8,7 @@ export type {
   MoltenHubPluginConfig,
   MoltenHubProfileSyncConfig,
   MoltenHubSafetyConfig,
+  MoltenHubTransportConfig,
   OpenClawPlugin,
   OpenClawPluginAPI,
   OpenClawToolRegisterOptions,
