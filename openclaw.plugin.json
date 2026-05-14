@@ -2,7 +2,7 @@
   "id": "openclaw-plugin-moltenhub",
   "name": "MoltenHub Realtime",
   "description": "Native MoltenHub runtime plugin for OpenClaw: skill exchange, runtime transport, profile/capability tools, and safety guardrails.",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "contracts": {
     "tools": [
       "moltenhub_skill_request",
@@ -89,6 +89,18 @@
             "type": "number",
             "default": 30000,
             "description": "Reuse recent runtime connectivity checks for this many milliseconds"
+          }
+        }
+      },
+      "transport": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "OpenClaw runtime message transport behavior",
+        "properties": {
+          "messagesPath": {
+            "type": "string",
+            "default": "/openclaw/messages",
+            "description": "Runtime/OpenClaw message transport base path"
           }
         }
       },

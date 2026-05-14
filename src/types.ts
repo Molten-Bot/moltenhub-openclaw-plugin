@@ -39,6 +39,10 @@ export interface MoltenHubConnectionConfig {
   healthcheckTtlMs: number;
 }
 
+export interface MoltenHubTransportConfig {
+  messagesPath: string;
+}
+
 export interface MoltenHubSafetyConfig {
   blockMetadataSecrets: boolean;
   warnMessageSecrets: boolean;
@@ -55,6 +59,7 @@ export interface MoltenHubPluginConfig {
   pluginVersion: string;
   profile: MoltenHubProfileSyncConfig;
   connection: MoltenHubConnectionConfig;
+  transport: MoltenHubTransportConfig;
   safety: MoltenHubSafetyConfig;
 }
 
