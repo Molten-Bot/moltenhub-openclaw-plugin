@@ -188,7 +188,7 @@ describe("MoltenHubClient", () => {
       messageId: "message-1",
       deliveryId: "delivery-1"
     });
-    expect(receivedURL).toBe("ws://127.0.0.1:8080/v1/openclaw/messages/ws?session_key=main");
+    expect(receivedURL).toBe("ws://127.0.0.1:8080/v1/runtime/messages/ws?session_key=main");
     expect(receivedAuth).toBe("Bearer agent-token");
     expect(sentSkillRequest?.skill_name).toBe("weather_lookup");
     expect(sentSkillRequest?.payload_format).toBe("json");
@@ -208,7 +208,7 @@ describe("MoltenHubClient", () => {
         body
       });
 
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/publish") {
+      if (method === "POST" && requestURL.pathname === "/v1/runtime/messages/publish") {
         return new Response(JSON.stringify({ ok: true, result: { message_id: "message-async-1" } }), {
           status: 200
         });
@@ -245,7 +245,7 @@ describe("MoltenHubClient", () => {
         "Skill request dispatched asynchronously; use the runtime pull or status transport tools for skill_result delivery."
     });
 
-    const publishCall = calls.find((entry) => entry.method === "POST" && entry.path === "/v1/openclaw/messages/publish");
+    const publishCall = calls.find((entry) => entry.method === "POST" && entry.path === "/v1/runtime/messages/publish");
     expect(publishCall).toBeDefined();
     expect(publishCall?.body?.client_msg_id).toBe("req-async-1");
     expect((publishCall?.body?.message as Record<string, unknown>).kind).toBe("skill_request");
@@ -266,7 +266,7 @@ describe("MoltenHubClient", () => {
         body
       });
 
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/publish") {
+      if (method === "POST" && requestURL.pathname === "/v1/runtime/messages/publish") {
         return new Response(JSON.stringify({ ok: true, result: { message_id: "message-async-2" } }), {
           status: 200
         });
@@ -308,7 +308,7 @@ describe("MoltenHubClient", () => {
       ]
     });
 
-    const publishCall = calls.find((entry) => entry.method === "POST" && entry.path === "/v1/openclaw/messages/publish");
+    const publishCall = calls.find((entry) => entry.method === "POST" && entry.path === "/v1/runtime/messages/publish");
     expect(publishCall).toBeDefined();
     expect(publishCall?.body?.to_agent_uuid).toBeUndefined();
     expect(publishCall?.body?.to_agent_uri).toBe("https://example.test/agents/peer-2");
@@ -1190,13 +1190,13 @@ describe("MoltenHubClient", () => {
           headers: { "Content-Type": "application/json" }
         });
       }
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/publish") {
+      if (method === "POST" && requestURL.pathname === "/v1/runtime/messages/publish") {
         return new Response(JSON.stringify({ ok: true, result: { message_id: "message-http" } }), {
           status: 202,
           headers: { "Content-Type": "application/json" }
         });
       }
-      if (method === "GET" && requestURL.pathname === "/v1/openclaw/messages/pull") {
+      if (method === "GET" && requestURL.pathname === "/v1/runtime/messages/pull") {
         return new Response(
           JSON.stringify({
             ok: true,
@@ -1214,7 +1214,7 @@ describe("MoltenHubClient", () => {
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
       }
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/ack") {
+      if (method === "POST" && requestURL.pathname === "/v1/runtime/messages/ack") {
         return new Response(JSON.stringify({ ok: true, result: { status: "acked" } }), {
           status: 200,
           headers: { "Content-Type": "application/json" }
@@ -1268,15 +1268,15 @@ describe("MoltenHubClient", () => {
     });
     expect(wsFactory).toHaveBeenCalledTimes(1);
     expect(wsFactory.mock.calls.map((call) => call[0])).toEqual([
-      "ws://127.0.0.1:8080/v1/openclaw/messages/ws?session_key=main"
+      "ws://127.0.0.1:8080/v1/runtime/messages/ws?session_key=main"
     ]);
     expect(
-      calls.some((call) => call.method === "POST" && call.path === "/v1/openclaw/messages/publish")
+      calls.some((call) => call.method === "POST" && call.path === "/v1/runtime/messages/publish")
     ).toBe(true);
     expect(
-      calls.some((call) => call.method === "GET" && call.path.startsWith("/v1/openclaw/messages/pull?timeout_ms="))
+      calls.some((call) => call.method === "GET" && call.path.startsWith("/v1/runtime/messages/pull?timeout_ms="))
     ).toBe(true);
-    expect(calls.some((call) => call.method === "POST" && call.path === "/v1/openclaw/messages/ack")).toBe(true);
+    expect(calls.some((call) => call.method === "POST" && call.path === "/v1/runtime/messages/ack")).toBe(true);
   });
 
   it("falls back mid-request and processes empty/unrelated pull deliveries", async () => {
@@ -1291,13 +1291,13 @@ describe("MoltenHubClient", () => {
       const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
       calls.push({ method, path, body });
 
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/publish") {
+      if (method === "POST" && requestURL.pathname === "/v1/runtime/messages/publish") {
         return new Response(JSON.stringify({ ok: true, result: { message_id: "message-mid-fallback" } }), {
           status: 202,
           headers: { "Content-Type": "application/json" }
         });
       }
-      if (method === "GET" && requestURL.pathname === "/v1/openclaw/messages/pull") {
+      if (method === "GET" && requestURL.pathname === "/v1/runtime/messages/pull") {
         pullCount += 1;
         if (pullCount === 1) {
           return new Response(null, { status: 204 });
@@ -1349,13 +1349,13 @@ describe("MoltenHubClient", () => {
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
       }
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/nack") {
+      if (method === "POST" && requestURL.pathname === "/v1/runtime/messages/nack") {
         return new Response(JSON.stringify({ ok: true, result: { status: "nacked" } }), {
           status: 200,
           headers: { "Content-Type": "application/json" }
         });
       }
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/ack") {
+      if (method === "POST" && requestURL.pathname === "/v1/runtime/messages/ack") {
         return new Response(JSON.stringify({ ok: true, result: { status: "acked" } }), {
           status: 200,
           headers: { "Content-Type": "application/json" }
@@ -1411,8 +1411,8 @@ describe("MoltenHubClient", () => {
       deliveryId: "delivery-final-mid-fallback"
     });
     expect(wsFactory).toHaveBeenCalledTimes(2);
-    expect(calls.filter((call) => call.method === "POST" && call.path === "/v1/openclaw/messages/nack")).toHaveLength(2);
-    expect(calls.filter((call) => call.method === "POST" && call.path === "/v1/openclaw/messages/ack")).toHaveLength(1);
+    expect(calls.filter((call) => call.method === "POST" && call.path === "/v1/runtime/messages/nack")).toHaveLength(2);
+    expect(calls.filter((call) => call.method === "POST" && call.path === "/v1/runtime/messages/ack")).toHaveLength(1);
   });
 
   it("reports http-pull readiness transport when websocket routes are unavailable", async () => {
@@ -1476,13 +1476,13 @@ describe("MoltenHubClient", () => {
           headers: { "Content-Type": "application/json" }
         });
       }
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/publish") {
+      if (method === "POST" && requestURL.pathname === "/v1/runtime/messages/publish") {
         return new Response(JSON.stringify({ ok: true, result: { message_id: "message-timeout" } }), {
           status: 202,
           headers: { "Content-Type": "application/json" }
         });
       }
-      if (method === "GET" && requestURL.pathname === "/v1/openclaw/messages/pull") {
+      if (method === "GET" && requestURL.pathname === "/v1/runtime/messages/pull") {
         return new Response(null, { status: 204 });
       }
       return new Response(JSON.stringify({ ok: true, result: {} }), {
@@ -1533,13 +1533,13 @@ describe("MoltenHubClient", () => {
           headers: { "Content-Type": "application/json" }
         });
       }
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/publish") {
+      if (method === "POST" && requestURL.pathname === "/v1/runtime/messages/publish") {
         return new Response(JSON.stringify({ ok: true, result: { message_id: "message-top-level" } }), {
           status: 202,
           headers: { "Content-Type": "application/json" }
         });
       }
-      if (method === "GET" && requestURL.pathname === "/v1/openclaw/messages/pull") {
+      if (method === "GET" && requestURL.pathname === "/v1/runtime/messages/pull") {
         return new Response(
           JSON.stringify({
             ok: true,
@@ -1558,7 +1558,7 @@ describe("MoltenHubClient", () => {
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
       }
-      if (method === "POST" && requestURL.pathname === "/v1/openclaw/messages/ack") {
+      if (method === "POST" && requestURL.pathname === "/v1/runtime/messages/ack") {
         return new Response(JSON.stringify({ ok: true, result: { status: "acked" } }), {
           status: 200,
           headers: { "Content-Type": "application/json" }

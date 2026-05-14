@@ -33,5 +33,12 @@ jobs:
       - name: Unit tests with coverage
         run: npm run test:coverage
 
+      - name: Build MoltenHub E2E image
+        run: |
+          git clone --depth 1 https://github.com/Molten-Bot/moltenhub /tmp/moltenhub
+          docker build -t moltenhub-openclaw-e2e:ci /tmp/moltenhub
+
       - name: Container E2E
+        env:
+          MOLTENHUB_IMAGE: moltenhub-openclaw-e2e:ci
         run: npm run test:e2e:container

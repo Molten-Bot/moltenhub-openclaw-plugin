@@ -57,7 +57,7 @@ const defaultPluginVersion = "0.2.4";
 const defaultProfileSyncIntervalMs = 300_000;
 const defaultHealthcheckTtlMs = 30_000;
 const defaultPullTimeoutMs = 5_000;
-const openClawMessagesPath = "/openclaw/messages";
+const runtimeMessagesPath = "/runtime/messages";
 
 const defaultSecretMarkers = [
   "api key",
@@ -939,7 +939,7 @@ export class MoltenHubClient {
 
   private async openSession(sessionKey: string, timeoutMs: number): Promise<WebSocketSession> {
     const wsBase = this.config.baseUrl.replace(/^http/i, "ws");
-    const wsURL = `${wsBase}${openClawMessagesPath}/ws?session_key=${encodeURIComponent(sessionKey)}`;
+    const wsURL = `${wsBase}${runtimeMessagesPath}/ws?session_key=${encodeURIComponent(sessionKey)}`;
     return this.openSessionAtURL(wsURL, timeoutMs);
   }
 
@@ -1162,7 +1162,7 @@ export class MoltenHubClient {
     options?: RuntimeRequestOptions
   ): Promise<Record<string, unknown>> {
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-    return this.runtimeJSON(method, `${openClawMessagesPath}${normalizedPath}`, body, options);
+    return this.runtimeJSON(method, `${runtimeMessagesPath}${normalizedPath}`, body, options);
   }
 
   private async runtimeText(path: string): Promise<string> {
