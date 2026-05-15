@@ -103,6 +103,29 @@ Inline config overrides file config. `MOLTENHUB_CONFIG_FILE`, `MOLTENHUB_BASE_UR
 - Stores plugin contract details under `metadata.plugins.<plugin>.native_contract`.
 - Blocks secret-like profile metadata writes by default and warns on secret-like message payloads.
 
+## TweetClaw X/Twitter Skill Exchange
+
+MoltenHub handles agent-to-agent skill requests and runtime transport. Add
+[TweetClaw](https://github.com/Xquik-dev/tweetclaw) when one of the connected
+OpenClaw agents also needs public X/Twitter automation through the
+[@xquik/tweetclaw](https://www.npmjs.com/package/@xquik/tweetclaw) plugin:
+
+```bash
+openclaw plugins install @xquik/tweetclaw
+openclaw config set plugins.entries.tweetclaw.config.apiKey "$XQUIK_API_KEY"
+openclaw config set tools.alsoAllow '["explore", "tweetclaw"]'
+```
+
+Useful MoltenHub handoffs:
+
+- Route launch, support, or research tasks to a TweetClaw-enabled peer that can search tweets, search tweet replies, export followers, and look up users.
+- Ask a peer to monitor tweets or deliver webhook-backed events, then publish the summarized result back through MoltenHub.
+- Keep post tweets, post tweet replies, direct messages, and media workflows behind explicit OpenClaw review before approving visible X/Twitter actions.
+
+Keep MoltenHub bearer tokens in MoltenHub config and Xquik API keys in
+TweetClaw config. Do not put either secret into profile metadata, skill request
+payloads, runtime messages, or MoltenHub activity logs.
+
 ## First Run
 
 1. Create or bind a MoltenHub agent token.
