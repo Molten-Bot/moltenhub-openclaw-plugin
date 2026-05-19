@@ -2160,6 +2160,112 @@ describe("MoltenHubClient", () => {
     expect(resolvedZeroTimeout.timeoutMs).toBe(20000);
   });
 
+  it("resolveConfig deep merges profile metadata and normalizes bounded safety settings", () => {
+    const filePath = writeTempJSONFile({
+      baseUrl: "https://file.example.com/v1",
+      token: "token-file",
+      profile: {
+        enabled: true,
+        handle: "file-handle",
+        metadata: {
+          fileOnly: true,
+          nested: {
+            fromFile: true
+          }
+        },
+        syncIntervalMs: 12_345
+      },
+      connection: {
+        healthcheckTtlMs: 60_000
+      },
+      safety: {
+        blockMetadataSecrets: true,
+        warnMessageSecrets: true,
+        secretMarkers: ["Custom Marker"]
+      }
+    });
+
+    const resolved = resolveConfig({
+      config: {
+        configFile: filePath,
+        baseUrl: "https://inline.example.com/v1",
+        token: "token-inline",
+        profileMetadata: {
+          nested: {
+            fromProfileMetadata: true
+          },
+          configOnly: true
+        },
+        profile: {
+          enabled: false,
+          handle: " inline-handle ",
+          metadata: {
+            nested: {
+              fromInlineProfile: true
+            },
+            inlineOnly: true
+          },
+          syncIntervalMs: 999_999_999
+        },
+        connection: {
+          healthcheckTtlMs: 500
+        },
+        safety: {
+          blockMetadataSecrets: false,
+          warnMessageSecrets: false,
+          secretMarkers: ["Custom Marker", "TOKEN="]
+        }
+      }
+    });
+
+    expect(resolved.profile).toMatchObject({
+      enabled: false,
+      handle: "inline-handle",
+      metadata: {
+        fileOnly: true,
+        configOnly: true,
+        inlineOnly: true,
+        nested: {
+          fromFile: true,
+          fromProfileMetadata: true,
+          fromInlineProfile: true
+        }
+      },
+      syncIntervalMs: 86_400_000
+    });
+    expect(resolved.connection.healthcheckTtlMs).toBe(1000);
+    expect(resolved.safety.blockMetadataSecrets).toBe(false);
+    expect(resolved.safety.warnMessageSecrets).toBe(false);
+    expect(resolved.safety.secretMarkers).toContain("custom marker");
+    expect(resolved.safety.secretMarkers).toContain("token=");
+    expect(resolved.safety.secretMarkers.filter((marker) => marker === "custom marker")).toHaveLength(1);
+  });
+
+  it("resolveConfig parses env-only booleans, intervals, and comma-separated markers", () => {
+    const resolved = resolveConfig({
+      env: {
+        MOLTENHUB_BASE_URL: "https://env.example.com",
+        MOLTENHUB_AGENT_TOKEN: "token-env",
+        MOLTENHUB_PROFILE_ENABLED: "off",
+        MOLTENHUB_PROFILE_SYNC_INTERVAL_MS: "9999",
+        MOLTENHUB_HEALTHCHECK_TTL_MS: "3600001",
+        MOLTENHUB_BLOCK_METADATA_SECRETS: "no",
+        MOLTENHUB_WARN_MESSAGE_SECRETS: "0",
+        MOLTENHUB_SECRET_MARKERS: "alpha,beta, alpha "
+      }
+    });
+
+    expect(resolved.baseUrl).toBe("https://env.example.com/v1");
+    expect(resolved.profile.enabled).toBe(false);
+    expect(resolved.profile.syncIntervalMs).toBe(10_000);
+    expect(resolved.connection.healthcheckTtlMs).toBe(3_600_000);
+    expect(resolved.safety.blockMetadataSecrets).toBe(false);
+    expect(resolved.safety.warnMessageSecrets).toBe(false);
+    expect(resolved.safety.secretMarkers).toContain("alpha");
+    expect(resolved.safety.secretMarkers).toContain("beta");
+    expect(resolved.safety.secretMarkers.filter((marker) => marker === "alpha")).toHaveLength(1);
+  });
+
   it("resolveConfig fails for unreadable or invalid config files", () => {
     const missingPath = join(tmpdir(), "moltenhub-openclaw-plugin-missing", "config.json");
     expect(() =>
